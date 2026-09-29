@@ -296,6 +296,25 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ inputs.retention_days || 14 }}
 
+      - name: Verify Android package ID
+        id: android-package
+        working-directory: apps/printer-testing
+        run: |
+          set -euo pipefail
+          EXPECTED_PACKAGE=$(jq -r '.expo.android.package' app.json)
+          APK=$(find release -name '*.apk' | head -1)
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          AAPT=$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
+          test -n "$AAPT"
+          ACTUAL_PACKAGE=$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
+          test -n "$ACTUAL_PACKAGE"
+          if [[ "$ACTUAL_PACKAGE" != "$EXPECTED_PACKAGE" ]]; then
+            echo "::error::Built APK package '$ACTUAL_PACKAGE' does not match app.json '$EXPECTED_PACKAGE'."
+            exit 1
+          fi
+          echo "package=$EXPECTED_PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "Verified Android package: $EXPECTED_PACKAGE"
+
       # ─────────────────────────────────────────────────────────────────────────
       # Google Play Store Auto-Publish
       # ─────────────────────────────────────────────────────────────────────────
@@ -333,9 +352,9 @@ jobs:
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJson: /tmp/google-play-service-account.json
-          packageName: com.indyzai.pos.app
+          packageName: ${{ steps.android-package.outputs.package }}
           releaseFiles: apps/printer-testing/release/indyz-pos-printer-${{ needs.metadata.outputs.pos_version }}.aab
-          track: ${{ steps.play-target.outputs.track }}
+          tracks: ${{ steps.play-target.outputs.track }}
           status: completed
           releaseName: ${{ github.run_number }} (${{ needs.metadata.outputs.pos_version }})
           whatsNewDirectory: distribution/whatsnew
