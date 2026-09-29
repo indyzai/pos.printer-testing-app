@@ -3,18 +3,9 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": [
-        "./apps/printer-testing/src/*"
-      ],
-      "@/assets/*": [
-        "./apps/printer-testing/assets/*"
-      ]
+      "@/*": ["./apps/printer-testing/src/*"],
+      "@/assets/*": ["./apps/printer-testing/assets/*"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }
