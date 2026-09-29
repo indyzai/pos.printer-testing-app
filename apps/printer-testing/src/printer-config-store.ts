@@ -13,21 +13,44 @@ const database = SQLite.openDatabaseAsync("printer-lab.db").then(async (db) => {
     return db;
 });
 
-type ConfigRow = { id: string; name: string; target_json: string; command_language: PrinterConfig["commandLanguage"]; paper_width: string; updated_at: number };
+type ConfigRow = {
+    id: string;
+    name: string;
+    target_json: string;
+    command_language: PrinterConfig["commandLanguage"];
+    paper_width: string;
+    updated_at: number;
+};
 
 export async function listPrinterConfigs(): Promise<PrinterConfig[]> {
     const db = await database;
-    const rows = await db.getAllAsync<ConfigRow>("SELECT * FROM printer_configs ORDER BY updated_at DESC");
-    return rows.map((row) => ({ id: row.id, name: row.name, target: JSON.parse(row.target_json), commandLanguage: row.command_language, paperWidth: row.paper_width, updatedAt: row.updated_at }));
+    const rows = await db.getAllAsync<ConfigRow>(
+        "SELECT * FROM printer_configs ORDER BY updated_at DESC",
+    );
+    return rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        target: JSON.parse(row.target_json),
+        commandLanguage: row.command_language,
+        paperWidth: row.paper_width,
+        updatedAt: row.updated_at,
+    }));
 }
 
 export async function savePrinterConfig(config: PrinterConfig): Promise<void> {
     const db = await database;
-    await db.runAsync(`INSERT INTO printer_configs (id, name, target_json, command_language, paper_width, updated_at)
+    await db.runAsync(
+        `INSERT INTO printer_configs (id, name, target_json, command_language, paper_width, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET name = excluded.name, target_json = excluded.target_json,
         command_language = excluded.command_language, paper_width = excluded.paper_width, updated_at = excluded.updated_at`,
-        config.id, config.name, JSON.stringify(config.target), config.commandLanguage, config.paperWidth, config.updatedAt);
+        config.id,
+        config.name,
+        JSON.stringify(config.target),
+        config.commandLanguage,
+        config.paperWidth,
+        config.updatedAt,
+    );
 }
 
 export async function deletePrinterConfig(id: string): Promise<void> {
