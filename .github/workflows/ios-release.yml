@@ -1,0 +1,337 @@
+name: iOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: Artifact retention in days
+        required: true
+        default: "14"
+        type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-release.yml"
+      - "apps/printer-testing/**"
+      - "packages/**"
+      - "vendor/pos-ui-shared"
+      - ".gitmodules"
+      - "package.json"
+      - "bun.lock"
+      - ".bun-version"
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/ios-release.yml"
+      - "apps/printer-testing/**"
+      - "packages/**"
+      - "vendor/pos-ui-shared"
+      - ".gitmodules"
+      - "package.json"
+      - "bun.lock"
+      - ".bun-version"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+  NODE_OPTIONS: --max-old-space-size=6144
+
+jobs:
+  validate:
+    name: Validate Applications
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.INDYZAI_PAT }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate POS Printer Testing
+        working-directory: apps/printer-testing
+        run: |
+          bunx tsc --noEmit
+          bun test tests
+
+
+  metadata:
+    name: Resolve release metadata
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    outputs:
+      pos_version: ${{ steps.release.outputs.pos_version }}
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      release_name: ${{ steps.release.outputs.release_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: release
+        name: Resolve versions and release type
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            RAW_TAG="${GITHUB_REF_NAME#v}"
+            POS_VERSION="$RAW_TAG"
+            TAG="$GITHUB_REF_NAME"
+            PRERELEASE=false
+            RELEASE_NAME="IndyzAI POS Printer Testing v${POS_VERSION}"
+          else
+            LATEST_TAG=$(curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
+              2>/dev/null | jq -r '.tag_name // empty' || true)
+
+            if [[ -n "$LATEST_TAG" ]]; then
+              BASE_POS="${LATEST_TAG#v}"
+            else
+              BASE_POS="$(jq -r '.expo.version' apps/printer-testing/app.json)"
+            fi
+            BASE_POS="$(echo "$BASE_POS" | sed 's/-alpha\..*//; s/-alpha$//')"
+            ALPHA_ID="${GITHUB_SHA:0:8}"
+            BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+
+            POS_VERSION="${BASE_POS}-alpha.${BUILD_NUMBER}.${ALPHA_ID}"
+            TAG="v${POS_VERSION}"
+            PRERELEASE=true
+            RELEASE_NAME="IndyzAI POS Printer Testing Alpha ${POS_VERSION} (Build ${BUILD_NUMBER})"
+          fi
+
+          {
+            echo "pos_version=$POS_VERSION"
+            echo "tag=$TAG"
+            echo "prerelease=$PRERELEASE"
+            echo "release_name=$RELEASE_NAME"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "POS version   : $POS_VERSION"
+          echo "Release tag   : $TAG"
+          echo "Release name  : $RELEASE_NAME"
+          echo "Prerelease    : $PRERELEASE"
+
+  ios-pos:
+    name: iOS POS App (Simulator)
+    needs: [metadata, validate]
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      IOS_DERIVED_DATA: /tmp/indyz-pos-derived-data
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.INDYZAI_PAT }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Set app version
+        working-directory: apps/printer-testing
+        env:
+          VERSION: ${{ needs.metadata.outputs.pos_version }}
+        run: |
+          jq \
+            --arg v  "$VERSION" \
+            --arg bn "$GITHUB_RUN_NUMBER" \
+            --argjson vc "$GITHUB_RUN_NUMBER" \
+            '.expo.version = $v | .expo.ios.buildNumber = $bn | .expo.android.versionCode = $vc' \
+            app.json > _app.json && mv _app.json app.json
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Generate iOS project
+        working-directory: apps/printer-testing
+        run: bunx expo prebuild --clean --platform ios --non-interactive --no-install
+
+      - name: Install CocoaPods dependencies
+        working-directory: apps/printer-testing/ios
+        run: pod install
+
+      - name: Detect workspace and scheme
+        id: xcode
+        working-directory: apps/printer-testing
+        run: |
+          set -euo pipefail
+
+          workspace="$(find ios -maxdepth 1 -name '*.xcworkspace' -type d -print -quit)"
+          if [ -z "$workspace" ]; then
+            echo "::error::Expo prebuild did not create an iOS workspace."
+            exit 1
+          fi
+          echo "Workspace: $workspace"
+
+          project="$(find ios -maxdepth 1 -name '*.xcodeproj' -type d -print -quit)"
+          if [ -z "$project" ]; then
+            echo "::error::Expo prebuild did not create an iOS application project."
+            exit 1
+          fi
+          project_name="${project##*/}"
+          project_name="${project_name%.xcodeproj}"
+          echo "Application project: $project"
+
+          xcodebuild -list -json -project "$project" > /tmp/ios-project.json
+          scheme="$(ruby -rjson -e '
+            project_name = ARGV.fetch(0)
+            items = JSON.parse(STDIN.read).dig("project", "schemes") || []
+            puts(items.find { |item| item == project_name } || items.first).to_s
+          ' "$project_name" < /tmp/ios-project.json)"
+
+          if [ -z "$scheme" ]; then
+            echo "::error::Could not find an application scheme."
+            exit 1
+          fi
+          echo "Scheme: $scheme"
+
+          sim_udid="$(
+            xcrun simctl list devices available --json \
+              | ruby -rjson -e '
+                  devices = JSON.parse(STDIN.read)["devices"]
+                  iphone  = devices
+                    .select { |k,_| k.include?("iOS") }
+                    .values.flatten
+                    .select { |d| d["isAvailable"] && d["name"].start_with?("iPhone") }
+                    .max_by { |d| d["name"] }
+                  puts iphone ? iphone["udid"] : ""
+                '
+          )"
+
+          if [ -z "$sim_udid" ]; then
+            echo "::error::No available iPhone simulator found."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Simulator UDID: $sim_udid"
+
+          {
+            echo "workspace=$workspace"
+            echo "scheme=$scheme"
+            echo "sim_udid=$sim_udid"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build iOS Simulator app
+        working-directory: apps/printer-testing
+        env:
+          WORKSPACE: ${{ steps.xcode.outputs.workspace }}
+          SCHEME: ${{ steps.xcode.outputs.scheme }}
+          SIM_UDID: ${{ steps.xcode.outputs.sim_udid }}
+        run: |
+          set -euo pipefail
+
+          if ! xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$IOS_DERIVED_DATA" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ENABLE_BITCODE=NO \
+            build > /tmp/xcodebuild.log 2>&1; then
+            grep -E "(error:|warning:|\*\* BUILD)" /tmp/xcodebuild.log || true
+            tail -100 /tmp/xcodebuild.log
+            exit 1
+          fi
+
+          grep -E "(warning:|\*\* BUILD SUCCEEDED \*\*)" /tmp/xcodebuild.log || true
+
+      - name: Package iOS artifact
+        env:
+          APP_VERSION: ${{ needs.metadata.outputs.pos_version }}
+        run: |
+          set -euo pipefail
+
+          app="$(find "$IOS_DERIVED_DATA/Build/Products" -maxdepth 3 -name '*.app' -type d -print -quit 2>/dev/null || true)"
+
+          if [ -z "$app" ]; then
+            echo "::error::No .app bundle found after build. Full derived data tree:"
+            find "$IOS_DERIVED_DATA" -type d | head -60 || true
+            echo "=== Last 50 lines of xcodebuild log ==="
+            tail -50 /tmp/xcodebuild.log || true
+            exit 1
+          fi
+
+          echo "Packaging: $app"
+          app_name="$(basename "$app" .app)"
+          versioned_app="${RUNNER_TEMP}/${app_name}-${APP_VERSION}.app"
+          cp -R "$app" "$versioned_app"
+          mkdir -p apps/printer-testing/release
+          ditto -c -k --sequesterRsrc --keepParent "$versioned_app" "apps/printer-testing/release/indyz-printer-testing-${APP_VERSION}-ios-simulator.zip"
+          echo "Archive size: $(du -sh "apps/printer-testing/release/indyz-printer-testing-${APP_VERSION}-ios-simulator.zip" | cut -f1)"
+
+      - name: Upload iOS POS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-pos-artifacts
+          path: apps/printer-testing/release/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days || 14 }}
+
+
+  github-release:
+    name: Publish iOS GitHub Release
+    needs: [metadata, ios-pos]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all iOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ios-*-artifacts
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish iOS artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.metadata.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.metadata.outputs.release_name }}
+          prerelease: ${{ needs.metadata.outputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-assets/*

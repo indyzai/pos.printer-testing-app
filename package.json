@@ -1,0 +1,29 @@
+{
+  "name": "pos.pos-ui-native-app",
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "vendor/pos-ui-shared/packages/*",
+    "vendor/pos-ui-shared/packages-native/*"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@react-native-community/cli": "^20.2.0",
+    "@types/bun": "^1.4.2",
+    "@types/react": "~19.2.2",
+    "expo": "~57.0.20",
+    "react": "19.2.3",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "bun run --filter @indyzai/printer-testing start",
+    "android": "bun run --filter @indyzai/printer-testing android",
+    "ios": "bun run --filter @indyzai/printer-testing ios",
+    "both": "bun run --filter @indyzai/printer-testing start",
+    "test": "bun test",
+    "typecheck": "bun x tsc -p apps/printer-testing/tsconfig.json --noEmit",
+    "format": "bun run --filter '*' format",
+    "format:check": "bun run --filter '*' format:check"
+  },
+  "private": true
+}

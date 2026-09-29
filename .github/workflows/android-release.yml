@@ -1,0 +1,370 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      archs:
+        description: Comma-separated Android ABIs to build
+        required: true
+        default: arm64-v8a,armeabi-v7a
+        type: string
+      retention_days:
+        description: Artifact retention in days
+        required: true
+        default: "14"
+        type: string
+      play_track:
+        description: Google Play track (internal, alpha, beta, production)
+        required: false
+        default: internal
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+      publish_to_play:
+        description: Publish Android AABs (POS Printer Testing) to Google Play Store
+        required: false
+        default: true
+        type: boolean
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/android-release.yml"
+      - "apps/printer-testing/**"
+      - "packages/**"
+      - "vendor/pos-ui-shared"
+      - ".gitmodules"
+      - "package.json"
+      - "bun.lock"
+      - ".bun-version"
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+    paths:
+      - ".github/workflows/android-release.yml"
+      - "apps/printer-testing/**"
+      - "packages/**"
+      - "vendor/pos-ui-shared"
+      - ".gitmodules"
+      - "package.json"
+      - "bun.lock"
+      - ".bun-version"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+  NODE_OPTIONS: --max-old-space-size=6144
+
+jobs:
+  validate:
+    name: Validate Applications
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.INDYZAI_PAT }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate POS Printer Testing
+        working-directory: apps/printer-testing
+        run: |
+          bunx tsc --noEmit
+          bun test tests
+
+  metadata:
+    name: Resolve release metadata
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    outputs:
+      pos_version: ${{ steps.release.outputs.pos_version }}
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      release_name: ${{ steps.release.outputs.release_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: release
+        name: Resolve versions and release type
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            RAW_TAG="${GITHUB_REF_NAME#v}"
+            POS_VERSION="$RAW_TAG"
+            TAG="$GITHUB_REF_NAME"
+            PRERELEASE=false
+            RELEASE_NAME="IndyzAI POS Printer Testing v${POS_VERSION}"
+          else
+            LATEST_TAG=$(curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
+              2>/dev/null | jq -r '.tag_name // empty' || true)
+
+            if [[ -n "$LATEST_TAG" ]]; then
+              BASE_POS="${LATEST_TAG#v}"
+            else
+              BASE_POS="$(jq -r '.expo.version' apps/printer-testing/app.json)"
+            fi
+            BASE_POS="$(echo "$BASE_POS" | sed 's/-alpha\..*//; s/-alpha$//')"
+            ALPHA_ID="${GITHUB_SHA:0:8}"
+            BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+
+            POS_VERSION="${BASE_POS}-alpha.${BUILD_NUMBER}.${ALPHA_ID}"
+            TAG="v${POS_VERSION}"
+            PRERELEASE=true
+            RELEASE_NAME="IndyzAI POS Alpha ${POS_VERSION} (Build ${BUILD_NUMBER})"
+          fi
+
+          {
+            echo "pos_version=$POS_VERSION"
+            echo "tag=$TAG"
+            echo "prerelease=$PRERELEASE"
+            echo "release_name=$RELEASE_NAME"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "POS version   : $POS_VERSION"
+          echo "Release tag   : $TAG"
+          echo "Release name  : $RELEASE_NAME"
+          echo "Prerelease    : $PRERELEASE"
+
+  android-pos:
+    name: Android POS Printer Testing App (APK & AAB)
+    needs: [metadata, validate]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HAS_UPLOAD_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      HAS_PLAY_STORE_KEY: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON != '' || secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.INDYZAI_PAT }}
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-ccache-pos-${{ github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-pos-main
+            ${{ runner.os }}-ccache-pos-
+          max-size: 2G
+          create-symlink: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Set app version
+        working-directory: apps/printer-testing
+        env:
+          VERSION: ${{ needs.metadata.outputs.pos_version }}
+        run: |
+          jq \
+            --arg v  "$VERSION" \
+            --arg bn "$GITHUB_RUN_NUMBER" \
+            --argjson vc "$GITHUB_RUN_NUMBER" \
+            '.expo.version = $v | .expo.android.versionCode = $vc | .expo.ios.buildNumber = $bn' \
+            app.json > _app.json && mv _app.json app.json
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Generate Android project
+        working-directory: apps/printer-testing
+        run: |
+          bunx expo prebuild --clean --platform android --non-interactive --no-install
+          python3 -c "
+          with open('android/gradle.properties', 'r') as f:
+              content = f.read()
+          content = content.replace('-Xmx2048m -XX:MaxMetaspaceSize=512m', '-Xmx6144m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -XX:+ParallelRefProcEnabled')
+          if 'org.gradle.caching=true' not in content:
+              content += '\norg.gradle.caching=true\norg.gradle.parallel=true\norg.gradle.vfs.watch=false\n'
+          with open('android/gradle.properties', 'w') as f:
+              f.write(content)
+          "
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Prepare upload key
+        if: env.HAS_UPLOAD_KEY == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KEYSTORE_PATH="$GITHUB_WORKSPACE/apps/printer-testing/android/app/upload-keystore.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          {
+            echo "SIGNING_FLAGS=-Pandroid.injected.signing.store.file=$KEYSTORE_PATH"
+            echo " -Pandroid.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD"
+            echo " -Pandroid.injected.signing.key.alias=$ANDROID_KEY_ALIAS"
+            echo " -Pandroid.injected.signing.key.password=$ANDROID_KEY_PASSWORD"
+          } | tr -d '\n' >> "$GITHUB_ENV"
+          echo "" >> "$GITHUB_ENV"
+
+      - name: Build release APK and AAB
+        working-directory: apps/printer-testing/android
+        env:
+          ARCHS: ${{ inputs.archs || 'arm64-v8a,armeabi-v7a' }}
+          CCACHE_DIR: ${{ runner.temp }}/.ccache
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          GRADLE_OPTS: >-
+            -Dorg.gradle.jvmargs="-Xmx6144m -XX:MaxMetaspaceSize=1024m -XX:+UseG1GC -XX:+ParallelRefProcEnabled"
+            -Dorg.gradle.parallel=true
+            -Dorg.gradle.caching=true
+            -Dorg.gradle.vfs.watch=false
+        run: |
+          ./gradlew app:assembleRelease app:bundleRelease \
+            --build-cache \
+            --parallel \
+            -PreactNativeArchitectures="$ARCHS" \
+            $SIGNING_FLAGS
+
+      - name: Collect Android artifacts
+        working-directory: apps/printer-testing
+        env:
+          APP_VERSION: ${{ needs.metadata.outputs.pos_version }}
+        run: |
+          set -euo pipefail
+          APK=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
+          AAB=$(find android/app/build/outputs/bundle/release -name '*.aab' | head -1)
+          mkdir -p release
+          cp "$APK" "release/indyz-pos-printer-${APP_VERSION}.apk"
+          cp "$AAB" "release/indyz-pos-printer-${APP_VERSION}.aab"
+          echo "APK: release/indyz-pos-printer-${APP_VERSION}.apk ($(du -sh "release/indyz-pos-printer-${APP_VERSION}.apk" | cut -f1))"
+          echo "AAB: release/indyz-pos-printer-${APP_VERSION}.aab ($(du -sh "release/indyz-pos-printer-${APP_VERSION}.aab" | cut -f1))"
+
+      - name: Upload Android POS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-pos-artifacts
+          path: apps/printer-testing/release/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days || 14 }}
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Google Play Store Auto-Publish
+      # ─────────────────────────────────────────────────────────────────────────
+      - name: Determine Google Play track and publish intent
+        id: play-target
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            TRACK="${{ inputs.play_track || 'internal' }}"
+            PUBLISH="${{ inputs.publish_to_play != false }}"
+          else
+            TRACK="internal"
+            PUBLISH="true"
+          fi
+          echo "track=$TRACK" >> "$GITHUB_OUTPUT"
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Google Play credentials and changelog
+        if: env.HAS_PLAY_STORE_KEY == 'true' && steps.play-target.outputs.publish == 'true'
+        env:
+          SERVICE_ACCOUNT_KEY: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON || secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          APP_VERSION: ${{ needs.metadata.outputs.pos_version }}
+        run: |
+          mkdir -p distribution/whatsnew
+          echo "Release ${APP_VERSION} (${GITHUB_SHA:0:7})" > distribution/whatsnew/whatsnew-en-US
+
+          if echo "$SERVICE_ACCOUNT_KEY" | grep -q '^{'; then
+            echo "$SERVICE_ACCOUNT_KEY" > /tmp/google-play-service-account.json
+          else
+            echo "$SERVICE_ACCOUNT_KEY" | base64 --decode > /tmp/google-play-service-account.json
+          fi
+          chmod 600 /tmp/google-play-service-account.json
+
+      - name: Publish AAB to Google Play Store (Internal Testing)
+        if: env.HAS_PLAY_STORE_KEY == 'true' && steps.play-target.outputs.publish == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: /tmp/google-play-service-account.json
+          packageName: com.indyzai.pos.app
+          releaseFiles: apps/printer-testing/release/indyz-pos-printer-${{ needs.metadata.outputs.pos_version }}.aab
+          track: ${{ steps.play-target.outputs.track }}
+          status: completed
+          releaseName: ${{ github.run_number }} (${{ needs.metadata.outputs.pos_version }})
+          whatsNewDirectory: distribution/whatsnew
+
+      - name: Google Play publish skipped notice
+        if: env.HAS_PLAY_STORE_KEY != 'true' && steps.play-target.outputs.publish == 'true'
+        run: |
+          echo "::notice title=Google Play Publish Skipped::Secret PLAY_STORE_SERVICE_ACCOUNT_JSON is not configured in repository secrets."
+
+  github-release:
+    name: Publish Android GitHub Release
+    needs: [metadata, android-pos]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: android-*-artifacts
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish Android artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.metadata.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.metadata.outputs.release_name }}
+          prerelease: ${{ needs.metadata.outputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-assets/*
