@@ -21,15 +21,9 @@ import {
     savePrinterConfig,
 } from "../printer-config-store";
 import { printerTransport } from "../printer-transport";
+import { networkPrinterTarget, testPayloadFor } from "../printer-test-data";
 
 type FoundPrinter = { label: string; detail: string; target: PrinterTarget };
-const testReceipt =
-    "G0AbYQFJbmR5ekFJIFByaW50ZXIgTGFiChthAENvbm5lY3Rpb24gdGVzdApQcmludCBwYXRoIGlzIHdvcmtpbmcuCgoKHVYA";
-const testLabels: Record<Exclude<CommandLanguage, "ESC/POS">, string> = {
-    ZPL: "XlhBXkZPMzAsMzBeQTBOLDMyLDMyXkZESW5keXpBSSBQcmludGVyIExhYl5GU15GTzMwLDgwXkEwTiwyNSwyNV5GRENvbm5lY3Rpb24gdGVzdCBPS15GU15YWg==",
-    EPL: "TgpBMjAsMjAsMCwzLDEsMSxOLCJJbmR5ekFJIFByaW50ZXIgTGFiIgpBMjAsNzAsMCwyLDEsMSxOLCJDb25uZWN0aW9uIHRlc3QgT0siClAxCg==",
-    CPCL: "ISAwIDIwMCAyMDAgMjAwIDEKVEVYVCA0IDAgMjAgMjAgSW5keXpBSSBQcmludGVyIExhYgpURVhUIDAgMCAyMCA4MCBDb25uZWN0aW9uIHRlc3QgT0sKRk9STQpQUklOVAo=",
-};
 const languages: CommandLanguage[] = ["ESC/POS", "ZPL", "EPL", "CPCL"];
 
 export default function HomeScreen() {
@@ -191,26 +185,17 @@ export default function HomeScreen() {
     }
 
     function selectNetwork() {
-        const parsedPort = Number(port);
-        if (
-            !host.trim() ||
-            !Number.isInteger(parsedPort) ||
-            parsedPort < 1 ||
-            parsedPort > 65535
-        ) {
-            setMessage(
-                "Enter a printer IP address or hostname and a valid TCP port.",
-            );
+        let target: PrinterTarget;
+        try {
+            target = networkPrinterTarget(host, port);
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : String(error));
             return;
         }
-        setSelected({
-            connection: "network",
-            address: host.trim(),
-            port: parsedPort,
-        });
+        setSelected(target);
         setActiveConfigId(null);
         setMessage(
-            `Network printer set to ${host.trim()}:${parsedPort}. Send a test receipt to check it.`,
+            `Network printer set to ${target.address}:${target.port}. Send a test print to check it.`,
         );
     }
 
@@ -228,9 +213,7 @@ export default function HomeScreen() {
                     : selected;
             const result = await printerTransport.write(
                 target,
-                commandLanguage === "ESC/POS"
-                    ? testReceipt
-                    : testLabels[commandLanguage],
+                testPayloadFor(commandLanguage),
             );
             setMessage(
                 `Test receipt sent (${result.bytesWritten} bytes). Check the printer output.`,
