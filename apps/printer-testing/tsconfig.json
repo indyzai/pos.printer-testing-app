@@ -4,10 +4,10 @@
     "strict": true,
     "paths": {
       "@/*": [
-        "apps/printer-testing/src/*"
+        "./apps/printer-testing/src/*"
       ],
       "@/assets/*": [
-        "./assets/*"
+        "./apps/printer-testing/assets/*"
       ]
     }
   },
