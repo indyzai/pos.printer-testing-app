@@ -1,16 +1,23 @@
 {
   "expo": {
-    "name": "pos.printer-testing-app",
-    "slug": "pos.printer-testing-app",
+    "name": "IndyzAI POS Printer Testing",
+    "slug": "indyzai-pos-printer-testing",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "scheme": "posprintertestingapp",
+    "scheme": "indyzai-pos-printer-testing",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Allow IndyzAI to discover and print to nearby Bluetooth label and receipt printers.",
+        "NSLocalNetworkUsageDescription": "Allow IndyzAI to send receipts and labels to printers on your local network."
+      },
+      "bundleIdentifier": "com.indyzai.pos.printsetup",
+      "supportsTablet": true
     },
     "android": {
+      "package": "com.indyzai.pos.printsetup",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
