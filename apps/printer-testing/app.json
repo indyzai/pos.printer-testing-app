@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "IndyzAI POS Printer Testing",
+    "name": "IndyzAI Printer Testing",
     "slug": "indyzai-pos-printer-testing",
     "version": "1.0.0",
     "orientation": "default",
@@ -8,7 +8,6 @@
     "scheme": "indyzai-pos-printer-testing",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Allow IndyzAI to discover and print to nearby Bluetooth label and receipt printers.",
         "NSLocalNetworkUsageDescription": "Allow IndyzAI to send receipts and labels to printers on your local network."
@@ -19,9 +18,8 @@
     "android": {
       "package": "com.indyzai.pos.printsetup",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
@@ -35,11 +33,12 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#FFFFFF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 240
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
