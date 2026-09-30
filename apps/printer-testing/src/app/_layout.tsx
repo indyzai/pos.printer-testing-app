@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { useColorScheme } from "react-native";
+import { startClarity } from "../config/clarity";
 
 import AppTabs from "../components/app-tabs";
 
@@ -11,6 +12,7 @@ export default function TabLayout() {
     const colorScheme = useColorScheme();
     useEffect(() => {
         void SplashScreen.hideAsync();
+        void startClarity();
     }, []);
     return (
         <ThemeProvider
