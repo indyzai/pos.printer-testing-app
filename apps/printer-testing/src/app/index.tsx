@@ -23,11 +23,28 @@ import {
 import { printerTransport } from "../printer-transport";
 import { networkPrinterTarget, testPayloadFor } from "../printer-test-data";
 
-type FoundPrinter = { label: string; detail: string; target: PrinterTarget };
+type FoundPrinter = {
+    label: string;
+    detail: string;
+    target: PrinterTarget;
+    savedConfig?: PrinterConfig;
+};
+type ScanGroup = "bluetooth" | "usb" | "network";
+type ScanPhase = "idle" | "scanning" | "done" | "error" | "unavailable";
 const languages: CommandLanguage[] = ["ESC/POS", "ZPL", "EPL", "CPCL"];
 
 export default function HomeScreen() {
     const [devices, setDevices] = useState<FoundPrinter[]>([]);
+    const [scanProgress, setScanProgress] = useState<
+        Record<ScanGroup, ScanPhase>
+    >({
+        bluetooth: "idle",
+        usb: "idle",
+        network: "done",
+    });
+    const [scanErrors, setScanErrors] = useState<
+        Partial<Record<ScanGroup, string>>
+    >({});
     const [selected, setSelected] = useState<PrinterTarget | null>(null);
     const [host, setHost] = useState("");
     const [port, setPort] = useState("9100");
@@ -42,6 +59,62 @@ export default function HomeScreen() {
         useState<CommandLanguage>("ESC/POS");
     const [paperWidth, setPaperWidth] = useState("80mm");
     const isNative = Platform.OS === "android" || Platform.OS === "ios";
+    const networkDevices: FoundPrinter[] = configs
+        .filter((config) => config.target.connection === "network")
+        .map((config) => ({
+            label: config.name,
+            detail: `${config.target.address}:${config.target.port} · saved address`,
+            target: config.target,
+            savedConfig: config,
+        }));
+    if (
+        selected?.connection === "network" &&
+        !networkDevices.some(
+            (device) =>
+                device.target.address === selected.address &&
+                device.target.port === selected.port,
+        )
+    ) {
+        networkDevices.unshift({
+            label: selected.address ?? "Network printer",
+            detail: `${selected.address}:${selected.port} · current address`,
+            target: selected,
+        });
+    }
+    const groups: {
+        key: ScanGroup;
+        title: string;
+        empty: string;
+        entries: FoundPrinter[];
+    }[] = [
+        {
+            key: "bluetooth",
+            title: "Bluetooth",
+            empty: "No paired or nearby Bluetooth printers found.",
+            entries: devices.filter(
+                (device) => device.target.connection === "bluetooth",
+            ),
+        },
+        {
+            key: "usb",
+            title: "USB / OTG",
+            empty: "No USB bulk-output devices found.",
+            entries: devices.filter(
+                (device) => device.target.connection === "usb",
+            ),
+        },
+        {
+            key: "network",
+            title: "Network",
+            empty: "Add a printer IP address below to use Wi-Fi or LAN.",
+            entries: networkDevices,
+        },
+    ];
+    const scanTotal =
+        Platform.OS === "android" ? 2 : Platform.OS === "ios" ? 1 : 0;
+    const scanFinished = (["bluetooth", "usb"] as const).filter(
+        (key) => scanProgress[key] === "done" || scanProgress[key] === "error",
+    ).length;
 
     useEffect(() => {
         void listPrinterConfigs()
@@ -119,22 +192,78 @@ export default function HomeScreen() {
         }
     }
 
+    function newConfig() {
+        setActiveConfigId(null);
+        setConfigName("");
+        setMessage(
+            "New configuration. Select a printer or keep the current connection, then save it with a name.",
+        );
+    }
+
+    async function selectDiscovered(device: FoundPrinter) {
+        if (device.savedConfig) {
+            applyConfig(device.savedConfig);
+            return;
+        }
+        setBusy(true);
+        try {
+            const target =
+                device.target.connection === "usb"
+                    ? await printerTransport.connect(device.target)
+                    : device.target;
+            setSelected(target);
+            setActiveConfigId(null);
+            setConfigName(device.label);
+            setMessage(
+                `${device.label} selected. Send a test print to check it.`,
+            );
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBusy(false);
+        }
+    }
+
     async function scan() {
         setBusy(true);
         setDevices([]);
-        setSelected(null);
-        setActiveConfigId(null);
-        setMessage("Checking available connections…");
+        setScanErrors({});
+        setScanProgress({
+            bluetooth: isNative ? "scanning" : "unavailable",
+            usb: Platform.OS === "android" ? "scanning" : "unavailable",
+            network: "done",
+        });
+        setMessage("Scanning Bluetooth and USB connections…");
         if (!isNative) {
             setMessage(
-                "Direct Bluetooth and USB scanning requires an Android or iOS development build. Add a Wi-Fi printer below.",
+                "Bluetooth and USB scanning require a native development build. Saved network addresses are shown below.",
             );
             setBusy(false);
             return;
         }
-        const jobs: Promise<FoundPrinter[]>[] = [
-            printerTransport.listBluetooth().then((found) =>
-                found.map((device) => ({
+        async function scanGroup(
+            group: "bluetooth" | "usb",
+            job: () => Promise<FoundPrinter[]>,
+        ) {
+            try {
+                const found = await job();
+                setDevices((current) => [...current, ...found]);
+                setScanProgress((current) => ({ ...current, [group]: "done" }));
+                return { found, error: "" };
+            } catch (error) {
+                const detail =
+                    error instanceof Error ? error.message : String(error);
+                setScanErrors((current) => ({ ...current, [group]: detail }));
+                setScanProgress((current) => ({
+                    ...current,
+                    [group]: "error",
+                }));
+                return { found: [] as FoundPrinter[], error: detail };
+            }
+        }
+        const jobs = [
+            scanGroup("bluetooth", async () =>
+                (await printerTransport.listBluetooth()).map((device) => ({
                     label: device.name,
                     detail: `${Platform.OS === "ios" ? "Bluetooth LE" : "Paired Bluetooth"} · ${device.address}`,
                     target: {
@@ -146,8 +275,8 @@ export default function HomeScreen() {
         ];
         if (Platform.OS === "android") {
             jobs.push(
-                printerTransport.listUsb().then((found) =>
-                    found.map((device) => ({
+                scanGroup("usb", async () =>
+                    (await printerTransport.listUsb()).map((device) => ({
                         label: device.name,
                         detail: `USB OTG · ${device.vendorId}:${device.productId}`,
                         target: { connection: "usb" as const, ...device },
@@ -155,26 +284,13 @@ export default function HomeScreen() {
                 ),
             );
         }
-        const results = await Promise.allSettled(jobs);
-        const found = results.flatMap((result) =>
-            result.status === "fulfilled" ? result.value : [],
-        );
-        const errors = results.flatMap((result) =>
-            result.status === "rejected"
-                ? [
-                      String(
-                          result.reason instanceof Error
-                              ? result.reason.message
-                              : result.reason,
-                      ),
-                  ]
-                : [],
-        );
-        setDevices(found);
+        const results = await Promise.all(jobs);
+        const found = results.flatMap((result) => result.found);
+        const errors = results.map((result) => result.error).filter(Boolean);
         setMessage(
             found.length
-                ? `${found.length} printer endpoint${found.length === 1 ? "" : "s"} found. Select one to test.`
-                : "No Bluetooth or USB printers found. Check pairing, cable, power, and permissions.",
+                ? `${found.length} device${found.length === 1 ? "" : "s"} found. Select one to test.`
+                : "No Bluetooth or USB devices found. Check pairing, OTG support, cable, and power.",
         );
         if (errors.length)
             setMessage(
@@ -239,16 +355,100 @@ export default function HomeScreen() {
                         />
                         <View>
                             <Text style={styles.brand}>IndyzAI</Text>
-                            <Text style={styles.brandSub}>PRINTER TESTING</Text>
+                            <Text style={styles.brandSub}>
+                                POS DEVICE TOOLS
+                            </Text>
                         </View>
                     </View>
-                    <Text style={styles.title}>Find and test your printer</Text>
+                    <Text style={styles.title}>Printer setup</Text>
                     <Text style={styles.intro}>
-                        Discover nearby printers, configure a connection, and
-                        send a test receipt.
+                        Discover devices, save each printer, and verify its
+                        output.
                     </Text>
+                    <View style={styles.overview}>
+                        <View style={styles.overviewItem}>
+                            <Text style={styles.overviewNumber}>
+                                {configs.length}
+                            </Text>
+                            <Text style={styles.overviewLabel}>
+                                Saved printers
+                            </Text>
+                        </View>
+                        <View style={styles.overviewDivider} />
+                        <View style={styles.overviewItem}>
+                            <Text style={styles.overviewNumber}>
+                                {devices.length}
+                            </Text>
+                            <Text style={styles.overviewLabel}>
+                                Found nearby
+                            </Text>
+                        </View>
+                    </View>
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Scan connections</Text>
+                        <View style={styles.cardHeader}>
+                            <View>
+                                <Text style={styles.eyebrow}>
+                                    YOUR WORKSPACE
+                                </Text>
+                                <Text style={styles.cardTitle}>
+                                    Saved printers
+                                </Text>
+                            </View>
+                            <Pressable
+                                accessibilityRole="button"
+                                onPress={newConfig}
+                                style={styles.smallButton}
+                            >
+                                <Text style={styles.smallButtonLabel}>
+                                    + New
+                                </Text>
+                            </Pressable>
+                        </View>
+                        {configs.length === 0 && (
+                            <Text style={styles.copy}>
+                                No printers saved yet. Scan or add a network
+                                printer below.
+                            </Text>
+                        )}
+                        {configs.map((config) => (
+                            <View
+                                key={config.id}
+                                style={[
+                                    styles.savedRow,
+                                    activeConfigId === config.id &&
+                                        styles.selected,
+                                ]}
+                            >
+                                <Pressable
+                                    accessibilityRole="button"
+                                    onPress={() => applyConfig(config)}
+                                    style={styles.savedDetails}
+                                >
+                                    <Text style={styles.deviceName}>
+                                        {config.name}
+                                    </Text>
+                                    <Text style={styles.deviceDetail}>
+                                        {config.target.connection.toUpperCase()}{" "}
+                                        · {config.commandLanguage} ·{" "}
+                                        {config.paperWidth}
+                                    </Text>
+                                </Pressable>
+                                <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Delete ${config.name}`}
+                                    onPress={() => void removeConfig(config)}
+                                    style={styles.deleteButton}
+                                >
+                                    <Text style={styles.deleteText}>
+                                        Delete
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        ))}
+                    </View>
+                    <View style={styles.card}>
+                        <Text style={styles.eyebrow}>STEP 01</Text>
+                        <Text style={styles.cardTitle}>Discover devices</Text>
                         <Text style={styles.copy}>
                             Bluetooth{" "}
                             {Platform.OS === "ios" ? "LE" : "paired devices"} ·{" "}
@@ -257,6 +457,12 @@ export default function HomeScreen() {
                                 : "USB OTG on Android"}{" "}
                             · Wi-Fi / LAN setup
                         </Text>
+                        {Platform.OS === "android" && (
+                            <Text style={styles.note}>
+                                Tap a USB result to grant Android access to that
+                                device.
+                            </Text>
+                        )}
                         <Pressable
                             accessibilityRole="button"
                             disabled={busy}
@@ -277,42 +483,122 @@ export default function HomeScreen() {
                         <Text accessibilityRole="alert" style={styles.status}>
                             {message}
                         </Text>
-                        {devices.map((device, index) => (
-                            <Pressable
-                                key={`${device.detail}-${index}`}
-                                accessibilityRole="button"
-                                onPress={() => {
-                                    setSelected(device.target);
-                                    setActiveConfigId(null);
-                                    setConfigName(device.label);
-                                    setMessage(
-                                        `${device.label} selected. Send a test print to check it.`,
-                                    );
-                                }}
-                                style={[
-                                    styles.device,
-                                    selected === device.target &&
-                                        styles.selected,
-                                ]}
-                            >
-                                <View style={styles.deviceIcon}>
-                                    <Text style={styles.deviceIconText}>▣</Text>
+                        {scanProgress.bluetooth !== "idle" && scanTotal > 0 && (
+                            <View style={styles.progressArea}>
+                                <Text style={styles.progressLabel}>
+                                    {busy && scanFinished < scanTotal
+                                        ? "Scanning connections"
+                                        : "Scan complete"}{" "}
+                                    · {scanFinished}/{scanTotal}
+                                </Text>
+                                <View
+                                    accessibilityRole="progressbar"
+                                    accessibilityValue={{
+                                        min: 0,
+                                        max: scanTotal,
+                                        now: scanFinished,
+                                    }}
+                                    style={styles.progressTrack}
+                                >
+                                    <View
+                                        style={[
+                                            styles.progressFill,
+                                            {
+                                                width: `${Math.round((scanFinished / scanTotal) * 100)}%`,
+                                            },
+                                        ]}
+                                    />
                                 </View>
-                                <View style={styles.deviceBody}>
-                                    <Text style={styles.deviceName}>
-                                        {device.label}
+                            </View>
+                        )}
+                        {groups.map((group) => (
+                            <View key={group.key} style={styles.group}>
+                                <View style={styles.groupHeader}>
+                                    <Text style={styles.groupTitle}>
+                                        {group.title}
                                     </Text>
-                                    <Text style={styles.deviceDetail}>
-                                        {device.detail}
-                                    </Text>
+                                    {scanProgress[group.key] === "scanning" ? (
+                                        <ActivityIndicator
+                                            size="small"
+                                            color="#1B6EF3"
+                                        />
+                                    ) : (
+                                        <Text style={styles.groupCount}>
+                                            {group.key === "network"
+                                                ? "Saved / manual"
+                                                : scanProgress[group.key] ===
+                                                    "unavailable"
+                                                  ? "Unavailable"
+                                                  : scanProgress[group.key] ===
+                                                      "error"
+                                                    ? "Check access"
+                                                    : scanProgress[
+                                                            group.key
+                                                        ] === "idle"
+                                                      ? "Ready"
+                                                      : `${group.entries.length} found`}
+                                        </Text>
+                                    )}
                                 </View>
-                                <Text style={styles.chevron}>›</Text>
-                            </Pressable>
+                                {scanErrors[group.key] && (
+                                    <Text style={styles.groupError}>
+                                        {scanErrors[group.key]}
+                                    </Text>
+                                )}
+                                {group.entries.length === 0 &&
+                                    scanProgress[group.key] !== "scanning" && (
+                                        <Text style={styles.groupEmpty}>
+                                            {scanProgress[group.key] === "idle"
+                                                ? "Start a scan to look for devices."
+                                                : scanProgress[group.key] ===
+                                                    "unavailable"
+                                                  ? group.key === "usb" &&
+                                                    Platform.OS === "ios"
+                                                      ? "USB OTG scanning is available on Android."
+                                                      : "Requires a native development build."
+                                                  : group.empty}
+                                        </Text>
+                                    )}
+                                {group.entries.map((device, index) => (
+                                    <Pressable
+                                        key={`${device.detail}-${index}`}
+                                        accessibilityRole="button"
+                                        onPress={() =>
+                                            void selectDiscovered(device)
+                                        }
+                                        style={[
+                                            styles.device,
+                                            selected === device.target &&
+                                                styles.selected,
+                                        ]}
+                                    >
+                                        <View style={styles.deviceIcon}>
+                                            <Text style={styles.deviceIconText}>
+                                                {group.key === "bluetooth"
+                                                    ? "BT"
+                                                    : group.key === "usb"
+                                                      ? "USB"
+                                                      : "LAN"}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.deviceBody}>
+                                            <Text style={styles.deviceName}>
+                                                {device.label}
+                                            </Text>
+                                            <Text style={styles.deviceDetail}>
+                                                {device.detail}
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.chevron}>›</Text>
+                                    </Pressable>
+                                ))}
+                            </View>
                         ))}
                     </View>
                     <View style={styles.card}>
+                        <Text style={styles.eyebrow}>STEP 02</Text>
                         <Text style={styles.cardTitle}>
-                            Wi-Fi / network printer
+                            Add network printer
                         </Text>
                         <Text style={styles.copy}>
                             Connect to the same network as your printer. Enter
@@ -328,7 +614,7 @@ export default function HomeScreen() {
                             value={host}
                             onChangeText={setHost}
                             placeholder="192.168.1.100"
-                            placeholderTextColor="#8992B4"
+                            placeholderTextColor="#6F7683"
                             style={styles.input}
                         />
                         <Text style={styles.fieldLabel}>TCP port</Text>
@@ -338,7 +624,7 @@ export default function HomeScreen() {
                             value={port}
                             onChangeText={setPort}
                             placeholder="9100"
-                            placeholderTextColor="#8992B4"
+                            placeholderTextColor="#6F7683"
                             style={styles.input}
                         />
                         <Pressable
@@ -368,7 +654,7 @@ export default function HomeScreen() {
                                     value={serviceUuid}
                                     onChangeText={setServiceUuid}
                                     placeholder="Service UUID"
-                                    placeholderTextColor="#8992B4"
+                                    placeholderTextColor="#6F7683"
                                     style={styles.input}
                                 />
                                 <TextInput
@@ -377,12 +663,13 @@ export default function HomeScreen() {
                                     value={characteristicUuid}
                                     onChangeText={setCharacteristicUuid}
                                     placeholder="Writable characteristic UUID"
-                                    placeholderTextColor="#8992B4"
+                                    placeholderTextColor="#6F7683"
                                     style={styles.input}
                                 />
                             </View>
                         )}
                     <View style={styles.card}>
+                        <Text style={styles.eyebrow}>STEP 03</Text>
                         <Text style={styles.cardTitle}>
                             Printer configuration
                         </Text>
@@ -398,7 +685,7 @@ export default function HomeScreen() {
                             value={configName}
                             onChangeText={setConfigName}
                             placeholder="Counter receipt printer"
-                            placeholderTextColor="#8992B4"
+                            placeholderTextColor="#6F7683"
                             style={styles.input}
                         />
                         <Text style={styles.fieldLabel}>Command language</Text>
@@ -432,7 +719,7 @@ export default function HomeScreen() {
                             value={paperWidth}
                             onChangeText={setPaperWidth}
                             placeholder="80mm or 4in"
-                            placeholderTextColor="#8992B4"
+                            placeholderTextColor="#6F7683"
                             style={styles.input}
                         />
                         <Pressable
@@ -450,36 +737,9 @@ export default function HomeScreen() {
                                     : "Save configuration"}
                             </Text>
                         </Pressable>
-                        {configs.map((config) => (
-                            <View key={config.id} style={styles.savedRow}>
-                                <Pressable
-                                    accessibilityRole="button"
-                                    onPress={() => applyConfig(config)}
-                                    style={styles.savedDetails}
-                                >
-                                    <Text style={styles.deviceName}>
-                                        {config.name}
-                                    </Text>
-                                    <Text style={styles.deviceDetail}>
-                                        {config.target.connection.toUpperCase()}{" "}
-                                        · {config.commandLanguage} ·{" "}
-                                        {config.paperWidth}
-                                    </Text>
-                                </Pressable>
-                                <Pressable
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Delete ${config.name}`}
-                                    onPress={() => void removeConfig(config)}
-                                    style={styles.deleteButton}
-                                >
-                                    <Text style={styles.deleteText}>
-                                        Delete
-                                    </Text>
-                                </Pressable>
-                            </View>
-                        ))}
                     </View>
                     <View style={styles.card}>
+                        <Text style={styles.eyebrow}>STEP 04</Text>
                         <Text style={styles.cardTitle}>Test connection</Text>
                         <Text style={styles.copy}>
                             {selected
@@ -516,15 +776,15 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: "#F7F8FF" },
+    screen: { flex: 1, backgroundColor: "#F9FAFF" },
     safe: { flex: 1 },
     content: {
         width: "100%",
-        maxWidth: 680,
+        maxWidth: 760,
         alignSelf: "center",
         padding: 20,
         paddingBottom: BottomTabInset + 40,
-        gap: 18,
+        gap: 16,
     },
     header: {
         flexDirection: "row",
@@ -533,102 +793,156 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     logo: { width: 44, height: 44, borderRadius: 12 },
-    brand: { color: "#17265A", fontSize: 22, fontWeight: "800" },
+    brand: { color: "#1A1C1E", fontSize: 21, fontWeight: "800" },
     brandSub: {
-        color: "#5867B8",
+        color: "#1B6EF3",
         fontSize: 10,
         fontWeight: "800",
         letterSpacing: 2,
     },
     title: {
-        color: "#17265A",
+        color: "#1A1C1E",
         fontSize: 32,
         lineHeight: 38,
         fontWeight: "800",
     },
-    intro: { color: "#657197", fontSize: 16, lineHeight: 23, marginTop: -10 },
+    intro: { color: "#43474F", fontSize: 15, lineHeight: 22, marginTop: -10 },
+    overview: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#D7E2FF",
+        borderRadius: 16,
+        paddingVertical: 16,
+        marginBottom: 2,
+    },
+    overviewItem: { flex: 1, alignItems: "center", gap: 2 },
+    overviewNumber: { color: "#1B6EF3", fontSize: 25, fontWeight: "800" },
+    overviewLabel: { color: "#43474F", fontSize: 12, fontWeight: "600" },
+    overviewDivider: { width: 1, height: 34, backgroundColor: "#B6CAFA" },
     card: {
         backgroundColor: "#FFFFFF",
-        borderRadius: 22,
+        borderRadius: 16,
         padding: 20,
         gap: 12,
         borderWidth: 1,
-        borderColor: "#E8EBFA",
+        borderColor: "#E5E9F0",
     },
-    cardTitle: { color: "#17265A", fontSize: 20, fontWeight: "700" },
-    copy: { color: "#657197", fontSize: 14, lineHeight: 21 },
+    cardHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    eyebrow: {
+        color: "#1B6EF3",
+        fontSize: 11,
+        fontWeight: "800",
+        letterSpacing: 1.5,
+    },
+    cardTitle: { color: "#1A1C1E", fontSize: 20, fontWeight: "700" },
+    copy: { color: "#43474F", fontSize: 14, lineHeight: 21 },
+    smallButton: {
+        backgroundColor: "#D7E2FF",
+        borderRadius: 9,
+        paddingHorizontal: 12,
+        paddingVertical: 9,
+    },
+    smallButtonLabel: { color: "#1B6EF3", fontWeight: "700", fontSize: 13 },
     primaryButton: {
-        backgroundColor: "#4055B4",
+        backgroundColor: "#1B6EF3",
         minHeight: 50,
-        borderRadius: 13,
+        borderRadius: 12,
         alignItems: "center",
         justifyContent: "center",
         marginTop: 4,
     },
     disabled: { opacity: 0.5 },
     primaryLabel: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
-    status: { color: "#52629B", fontSize: 13, lineHeight: 19 },
+    status: { color: "#43474F", fontSize: 13, lineHeight: 19 },
+    progressArea: { gap: 7, paddingVertical: 4 },
+    progressLabel: { color: "#43474F", fontSize: 12, fontWeight: "700" },
+    progressTrack: {
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: "#D7E2FF",
+        overflow: "hidden",
+    },
+    progressFill: { height: "100%", backgroundColor: "#1B6EF3" },
+    group: {
+        gap: 8,
+        borderTopWidth: 1,
+        borderTopColor: "#E5E9F0",
+        paddingTop: 12,
+    },
+    groupHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+    },
+    groupTitle: { color: "#1A1C1E", fontSize: 15, fontWeight: "700" },
+    groupCount: { color: "#43474F", fontSize: 12, fontWeight: "600" },
+    groupError: { color: "#BA1A1A", fontSize: 12, lineHeight: 17 },
+    groupEmpty: { color: "#6F7683", fontSize: 12, lineHeight: 18 },
     device: {
         borderWidth: 1,
-        borderColor: "#E7EAF7",
-        borderRadius: 14,
+        borderColor: "#E5E9F0",
+        borderRadius: 12,
         padding: 12,
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
     },
-    selected: { borderColor: "#4055B4", backgroundColor: "#F1F3FF" },
+    selected: { borderColor: "#1B6EF3", backgroundColor: "#EEF4FF" },
     deviceIcon: {
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: "#E9ECFF",
+        backgroundColor: "#D7E2FF",
         alignItems: "center",
         justifyContent: "center",
     },
-    deviceIconText: { color: "#4055B4", fontSize: 22 },
+    deviceIconText: { color: "#1B6EF3", fontSize: 10, fontWeight: "800" },
     deviceBody: { flex: 1 },
-    deviceName: { color: "#17265A", fontWeight: "700", fontSize: 15 },
-    deviceDetail: { color: "#657197", fontSize: 12, marginTop: 2 },
-    chevron: { color: "#4055B4", fontSize: 24 },
+    deviceName: { color: "#1A1C1E", fontWeight: "700", fontSize: 15 },
+    deviceDetail: { color: "#43474F", fontSize: 12, marginTop: 2 },
+    chevron: { color: "#1B6EF3", fontSize: 24 },
     fieldLabel: {
-        color: "#324174",
+        color: "#43474F",
         fontSize: 13,
         fontWeight: "700",
         marginBottom: -7,
     },
     input: {
         borderWidth: 1,
-        borderColor: "#DDE2F4",
+        borderColor: "#C3C6CF",
         borderRadius: 12,
         paddingHorizontal: 14,
         minHeight: 46,
-        color: "#17265A",
+        color: "#1A1C1E",
         fontSize: 15,
     },
     secondaryButton: {
         minHeight: 46,
         borderRadius: 12,
-        backgroundColor: "#E9ECFF",
+        backgroundColor: "#D7E2FF",
         alignItems: "center",
         justifyContent: "center",
     },
-    secondaryLabel: { color: "#4055B4", fontWeight: "700" },
-    note: { color: "#657197", fontSize: 12 },
+    secondaryLabel: { color: "#1B6EF3", fontWeight: "700" },
+    note: { color: "#43474F", fontSize: 12 },
     options: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     option: {
         borderWidth: 1,
-        borderColor: "#DDE2F4",
+        borderColor: "#C3C6CF",
         paddingHorizontal: 12,
         paddingVertical: 9,
         borderRadius: 9,
     },
-    optionSelected: { backgroundColor: "#4055B4", borderColor: "#4055B4" },
-    optionText: { color: "#52629B", fontWeight: "700", fontSize: 12 },
+    optionSelected: { backgroundColor: "#1B6EF3", borderColor: "#1B6EF3" },
+    optionText: { color: "#43474F", fontWeight: "700", fontSize: 12 },
     optionTextSelected: { color: "#FFFFFF" },
     savedRow: {
         borderTopWidth: 1,
-        borderTopColor: "#E8EBFA",
+        borderTopColor: "#E5E9F0",
         paddingTop: 12,
         flexDirection: "row",
         alignItems: "center",
@@ -636,5 +950,5 @@ const styles = StyleSheet.create({
     },
     savedDetails: { flex: 1 },
     deleteButton: { padding: 8 },
-    deleteText: { color: "#BB3D59", fontSize: 12, fontWeight: "700" },
+    deleteText: { color: "#BA1A1A", fontSize: 12, fontWeight: "700" },
 });

@@ -10,7 +10,7 @@ const sections = [
     },
     {
         title: "USB and USB OTG",
-        body: "Android can discover compatible USB bulk endpoints through an OTG cable. Connect and power the printer, scan, then select the endpoint. Generic USB host printing is unavailable on iOS.",
+        body: "Connect and power the printer with an OTG cable, then scan. Tap the USB result and allow Android device access before printing. Generic USB host printing is unavailable on iOS.",
     },
     {
         title: "Wi-Fi and Ethernet",
@@ -50,7 +50,7 @@ export default function GuideScreen() {
 }
 
 const styles = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: "#F7F8FF" },
+    screen: { flex: 1, backgroundColor: "#F9FAFF" },
     safe: { flex: 1 },
     content: {
         width: "100%",
@@ -61,14 +61,14 @@ const styles = StyleSheet.create({
         gap: 16,
     },
     eyebrow: {
-        color: "#5867B8",
+        color: "#1B6EF3",
         fontSize: 11,
         fontWeight: "800",
         letterSpacing: 2,
     },
-    title: { color: "#17265A", fontSize: 32, fontWeight: "800" },
+    title: { color: "#1A1C1E", fontSize: 32, fontWeight: "800" },
     intro: {
-        color: "#657197",
+        color: "#43474F",
         fontSize: 16,
         lineHeight: 23,
         marginTop: -8,
@@ -80,12 +80,12 @@ const styles = StyleSheet.create({
         padding: 20,
         gap: 8,
         borderWidth: 1,
-        borderColor: "#E8EBFA",
+        borderColor: "#E5E9F0",
     },
-    heading: { color: "#17265A", fontSize: 20, fontWeight: "700" },
-    body: { color: "#657197", fontSize: 15, lineHeight: 23 },
+    heading: { color: "#1A1C1E", fontSize: 20, fontWeight: "700" },
+    body: { color: "#43474F", fontSize: 15, lineHeight: 23 },
     note: {
-        color: "#657197",
+        color: "#43474F",
         fontSize: 13,
         lineHeight: 20,
         textAlign: "center",

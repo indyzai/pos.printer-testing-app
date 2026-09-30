@@ -10,6 +10,7 @@ const unavailable = () =>
 export const printerTransport = {
     listBluetooth: unavailable,
     listUsb: unavailable,
+    connect: (_target: PrinterTarget): Promise<PrinterTarget> => unavailable(),
     write: (
         _target: PrinterTarget,
         _base64: string,
