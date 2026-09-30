@@ -12,11 +12,11 @@
         "NSBluetoothAlwaysUsageDescription": "Allow IndyzAI to discover and print to nearby Bluetooth label and receipt printers.",
         "NSLocalNetworkUsageDescription": "Allow IndyzAI to send receipts and labels to printers on your local network."
       },
-      "bundleIdentifier": "com.indyzai.pos.printsetup",
+      "bundleIdentifier": "com.indyzai.pos.print.setup",
       "supportsTablet": true
     },
     "android": {
-      "package": "com.indyzai.pos.printsetup",
+      "package": "com.indyzai.pos.print.setup",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
