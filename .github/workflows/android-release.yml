@@ -346,8 +346,12 @@ jobs:
             echo "$SERVICE_ACCOUNT_KEY" | base64 --decode > /tmp/google-play-service-account.json
           fi
           chmod 600 /tmp/google-play-service-account.json
+          SERVICE_ACCOUNT_EMAIL=$(jq -er '.client_email' /tmp/google-play-service-account.json)
+          echo "Google Play service account: $SERVICE_ACCOUNT_EMAIL"
+          echo "Google Play package: ${{ steps.android-package.outputs.package }}"
 
       - name: Publish AAB to Google Play Store (Internal Testing)
+        id: publish-play
         if: env.HAS_PLAY_STORE_KEY == 'true' && steps.play-target.outputs.publish == 'true'
         uses: r0adkll/upload-google-play@v1
         with:
@@ -358,6 +362,11 @@ jobs:
           status: completed
           releaseName: ${{ github.run_number }} (${{ needs.metadata.outputs.pos_version }})
           whatsNewDirectory: distribution/whatsnew
+
+      - name: Show Google Play access guidance
+        if: ${{ always() && steps.publish-play.outcome == 'failure' }}
+        run: |
+          echo "::notice::If Google Play reports 'The caller does not have permission', grant the service account shown above access to app '${{ steps.android-package.outputs.package }}' and permission to release to the selected testing track. The Publishing API also requires an initial AAB uploaded through Play Console."
 
       - name: Google Play publish skipped notice
         if: env.HAS_PLAY_STORE_KEY != 'true' && steps.play-target.outputs.publish == 'true'
