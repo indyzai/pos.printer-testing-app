@@ -19,6 +19,7 @@
     "start": "bun run --filter @indyzai/printer-testing start",
     "android": "bun run --filter @indyzai/printer-testing android",
     "ios": "bun run --filter @indyzai/printer-testing ios",
+    "ios-build": "RCT_METRO_PORT=8081 npx expo prebuild --clean --platform ios",
     "both": "bun run --filter @indyzai/printer-testing start",
     "test": "bun test",
     "typecheck": "bun x tsc -p apps/printer-testing/tsconfig.json --noEmit",

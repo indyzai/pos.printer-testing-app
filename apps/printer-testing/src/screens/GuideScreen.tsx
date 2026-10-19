@@ -12,7 +12,7 @@ const sections = [
     },
     {
         title: "USB and USB OTG",
-        body: "Connect and power the printer with an OTG cable, then scan. Tap the USB result and allow Android device access before printing. Generic USB host printing is unavailable on iOS.",
+        body: "Android: connect the powered printer through an OTG adapter and run the USB check. Desktop web: use a compatible Chrome/Edge browser over HTTPS or localhost, press Choose USB printer, and grant access. Some OS drivers prevent the browser from claiming a printer. iPhone/iPad generic USB printing is unavailable; wired accessory support requires an approved manufacturer SDK/protocol.",
     },
     {
         title: "Wi-Fi and Ethernet",
@@ -44,7 +44,7 @@ export default function GuideScreen() {
                     ))}
                     <Text style={styles.note}>
                         {Platform.OS === "web"
-                            ? "Use an Android or iOS development build for direct printer access."
+                            ? "Use WebUSB for compatible desktop USB printers, or the native Android/iOS app for its supported connections."
                             : "Direct printer access requires a development build with the native printer module. Expo Go cannot scan or print."}
                     </Text>
                 </ScrollView>

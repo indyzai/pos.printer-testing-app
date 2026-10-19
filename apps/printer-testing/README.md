@@ -1,6 +1,6 @@
 # Printer testing app
 
-Run `bun install` from the repository root, then `bun run start` from `apps/printer-testing`. Use an Android or iOS development build containing the native printer module for physical printing. The web build supports configuration and POS account management but cannot access printers.
+Run `bun install` from the repository root, then `bun run start` from `apps/printer-testing`. Use an Android or iOS development build containing the native printer module for physical printing. The web build supports direct USB printing through WebUSB in compatible Chrome/Edge desktop browsers over HTTPS or localhost, as well as configuration and POS account management. It cannot open raw TCP or native Bluetooth connections.
 
 Guest mode opens by default. Discover a USB/Bluetooth printer or enter a network address, select a command language and paper width, and save the configuration locally. Android/iOS use SQLite; web uses browser local storage. Test printing never requires an account.
 
@@ -44,3 +44,16 @@ The USB inventory does not prove physical output. Check the paper before retryin
 ## Trace logs
 
 Open **Logs** after reproducing a scan, connection, test-print, or POS print-job issue. The tab shows timestamped events, durations, USB inventory/endpoints and access status, transmitted byte counts, and API operation outcomes. Use **Copy all logs** to copy the trace, **Copy** on a row for a single event, or **Clear** to start a fresh trace. Logs stay in memory across tabs and retain the latest 500 events until the app restarts. Credentials and print contents are excluded or redacted. Rebuild the native APK to include Expo Clipboard for copying on Android/iOS; the selectable log text remains available if clipboard access fails.
+
+## Platform connections
+
+| Platform | USB / OTG | Other supported paths |
+| --- | --- | --- |
+| Android native | USB host enumeration, permission, and bulk-output printing | Paired Bluetooth, raw TCP network |
+| iPhone / iPad native | No generic USB host printer API; requires a manufacturer-approved accessory SDK/protocol | BLE with service/characteristic UUIDs, raw TCP network |
+| Windows / macOS / Linux / ChromeOS web | WebUSB in compatible Chrome/Edge browsers | POS configuration and job management |
+| Safari / Firefox / iOS web browsers | WebUSB unavailable | Configuration and POS account management |
+
+For desktop web USB, press **Choose USB printer** directly and approve the browser chooser. Scanning lists only devices already authorized for this origin. Select a discovered bulk-output connection, save it locally, then print a test. Saved settings do not bypass browser permissions: choose the device again after access is revoked. The OS driver can prevent claiming an interface; this app does not detach OS drivers or bypass browser restrictions. Identical printers without serial numbers must be connected one at a time to avoid sending output to the wrong device. USB writes are chunked, time-limited, traced, and never automatically retried after uncertain output.
+
+The CD410-UB has no supplied iOS SDK/protocol in this project. Generic wired printing on iOS is not implemented; use the existing BLE/network connection if supported by the actual printer, or obtain the manufacturer's integration SDK. Plugging in an adapter alone cannot enable a raw USB transport on iOS.

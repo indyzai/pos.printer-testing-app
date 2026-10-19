@@ -12,7 +12,7 @@ import {
     useAppTheme,
     type ThemeColors,
 } from "@indyzai/pos-ui-native";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
     ActivityIndicator,
     Platform,
@@ -44,6 +44,9 @@ type FoundPrinter = {
 };
 type ScanGroup = "bluetooth" | "usb" | "network";
 type ScanPhase = "idle" | "scanning" | "done" | "error" | "unavailable";
+const subscribeToEnvironment = () => () => {};
+const clientEnvironmentReady = () => true;
+const serverEnvironmentReady = () => false;
 const languages: CommandLanguage[] = ["ESC/POS", "ZPL", "EPL", "CPCL"];
 
 export default function HomeScreen() {
@@ -80,7 +83,28 @@ export default function HomeScreen() {
     const [commandLanguage, setCommandLanguage] =
         useState<CommandLanguage>("ESC/POS");
     const [paperWidth, setPaperWidth] = useState("80mm");
-    const isNative = Platform.OS === "android" || Platform.OS === "ios";
+    const transportReady = useSyncExternalStore(
+        subscribeToEnvironment,
+        clientEnvironmentReady,
+        serverEnvironmentReady,
+    );
+    const capabilities = transportReady
+        ? (printerTransport.capabilities?.() ?? {
+              usb: Platform.OS === "android",
+              bluetooth: Platform.OS === "android" || Platform.OS === "ios",
+              network: Platform.OS !== "web",
+              system: false,
+          })
+        : { usb: false, bluetooth: false, network: false, system: false };
+    const canPrint =
+        !!selected &&
+        (selected.connection === "usb"
+            ? capabilities.usb
+            : selected.connection === "bluetooth"
+              ? capabilities.bluetooth
+              : selected.connection === "network"
+                ? capabilities.network
+                : capabilities.system);
     const networkDevices: FoundPrinter[] = configs
         .filter((config) => config.target.connection === "network")
         .map((config) => ({
@@ -132,8 +156,7 @@ export default function HomeScreen() {
             entries: networkDevices,
         },
     ];
-    const scanTotal =
-        Platform.OS === "android" ? 2 : Platform.OS === "ios" ? 1 : 0;
+    const scanTotal = Number(capabilities.usb) + Number(capabilities.bluetooth);
     const scanFinished = (["bluetooth", "usb"] as const).filter(
         (key) => scanProgress[key] === "done" || scanProgress[key] === "error",
     ).length;
@@ -246,6 +269,31 @@ export default function HomeScreen() {
         }
     }
 
+    async function chooseBrowserUsb() {
+        if (!printerTransport.requestUsb || busy) return;
+        setBusy(true);
+        try {
+            const report = await printerTransport.requestUsb();
+            setUsbReport(report);
+            setDevices((current) => [
+                ...current.filter(
+                    (device) => device.target.connection !== "usb",
+                ),
+                ...report.printers.map((device) => ({
+                    label: device.name,
+                    detail: `USB · ${device.vendorId}:${device.productId}`,
+                    target: { connection: "usb" as const, ...device },
+                })),
+            ]);
+            setScanProgress((current) => ({ ...current, usb: "done" }));
+            setScanErrors((current) => ({ ...current, usb: undefined }));
+            setMessage(usbScanSummary(report, "web"));
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBusy(false);
+        }
+    }
     async function scan(usbOnly = false) {
         traceLog.write("info", "Scan", "Scan requested", {
             mode: usbOnly ? "usb" : "all",
@@ -265,10 +313,10 @@ export default function HomeScreen() {
         setScanProgress((current) => ({
             bluetooth: usbOnly
                 ? current.bluetooth
-                : isNative
+                : capabilities.bluetooth
                   ? "scanning"
                   : "unavailable",
-            usb: Platform.OS === "android" ? "scanning" : "unavailable",
+            usb: capabilities.usb ? "scanning" : "unavailable",
             network: "done",
         }));
         setMessage(
@@ -276,9 +324,9 @@ export default function HomeScreen() {
                 ? "Checking USB OTG connection…"
                 : "Scanning Bluetooth and USB connections…",
         );
-        if (!isNative) {
+        if (!capabilities.usb && !capabilities.bluetooth) {
             setMessage(
-                "Bluetooth and USB scanning require a native development build. Saved network addresses are shown below.",
+                "USB access is unavailable in this browser. Use a compatible Chrome/Edge browser over HTTPS or localhost, or use the native Android app. iOS native supports BLE and network printers.",
             );
             setBusy(false);
             return;
@@ -303,23 +351,24 @@ export default function HomeScreen() {
                 return { found: [] as FoundPrinter[], error: detail };
             }
         }
-        const jobs = usbOnly
-            ? []
-            : [
-                  scanGroup("bluetooth", async () =>
-                      (await printerTransport.listBluetooth()).map(
-                          (device) => ({
-                              label: device.name,
-                              detail: `${Platform.OS === "ios" ? "Bluetooth LE" : "Paired Bluetooth"} · ${device.address}`,
-                              target: {
-                                  connection: "bluetooth" as const,
-                                  address: device.address,
-                              },
-                          }),
+        const jobs =
+            usbOnly || !capabilities.bluetooth
+                ? []
+                : [
+                      scanGroup("bluetooth", async () =>
+                          (await printerTransport.listBluetooth()).map(
+                              (device) => ({
+                                  label: device.name,
+                                  detail: `${Platform.OS === "ios" ? "Bluetooth LE" : "Paired Bluetooth"} · ${device.address}`,
+                                  target: {
+                                      connection: "bluetooth" as const,
+                                      address: device.address,
+                                  },
+                              }),
+                          ),
                       ),
-                  ),
-              ];
-        if (Platform.OS === "android") {
+                  ];
+        if (capabilities.usb) {
             jobs.push(
                 scanGroup("usb", async () => {
                     const report = await printerTransport.scanUsb();
@@ -340,7 +389,10 @@ export default function HomeScreen() {
             found.length
                 ? `${found.length} device${found.length === 1 ? "" : "s"} found. Select one to test.`
                 : usbResult.report
-                  ? usbScanSummary(usbResult.report)
+                  ? usbScanSummary(
+                        usbResult.report,
+                        Platform.OS === "web" ? "web" : "android",
+                    )
                   : "No Bluetooth or USB devices found. Check pairing, OTG support, cable, and power.",
         );
         if (errors.length)
@@ -550,20 +602,16 @@ export default function HomeScreen() {
                                     Discover devices
                                 </Text>
                                 <Text style={styles.copy}>
-                                    Bluetooth{" "}
-                                    {Platform.OS === "ios"
-                                        ? "LE"
-                                        : "paired devices"}{" "}
-                                    ·{" "}
-                                    {Platform.OS === "android"
-                                        ? "USB / USB OTG"
-                                        : "USB OTG on Android"}{" "}
-                                    · Wi-Fi / LAN setup
+                                    {Platform.OS === "web"
+                                        ? "USB via browser permission · saved printer configurations"
+                                        : Platform.OS === "ios"
+                                          ? "Bluetooth LE · Wi-Fi / LAN setup"
+                                          : "Paired Bluetooth · USB / USB OTG · Wi-Fi / LAN setup"}
                                 </Text>
-                                {Platform.OS === "android" && (
+                                {capabilities.usb && (
                                     <Text style={styles.note}>
-                                        Tap a USB result to grant Android access
-                                        to that device.
+                                        Select a USB result to verify its
+                                        connection and access permission.
                                     </Text>
                                 )}
                                 <Pressable
@@ -585,7 +633,19 @@ export default function HomeScreen() {
                                         </Text>
                                     )}
                                 </Pressable>
-                                {Platform.OS === "android" && (
+                                {Platform.OS === "web" && capabilities.usb && (
+                                    <Pressable
+                                        accessibilityRole="button"
+                                        disabled={busy}
+                                        onPress={() => void chooseBrowserUsb()}
+                                        style={styles.secondaryButton}
+                                    >
+                                        <Text style={styles.secondaryLabel}>
+                                            Choose USB printer
+                                        </Text>
+                                    </Pressable>
+                                )}
+                                {capabilities.usb && (
                                     <Pressable
                                         accessibilityRole="button"
                                         disabled={busy}
@@ -636,6 +696,21 @@ export default function HomeScreen() {
                                             </View>
                                         </View>
                                     )}
+                                {Platform.OS === "ios" && (
+                                    <Text style={styles.copy}>
+                                        iPhone/iPad: generic USB OTG printing is
+                                        unavailable. Use BLE or a network
+                                        printer. Wired accessory support needs a
+                                        manufacturer-approved iOS SDK/protocol.
+                                    </Text>
+                                )}
+                                {Platform.OS === "web" && (
+                                    <Text style={styles.copy}>
+                                        {capabilities.usb
+                                            ? "Desktop USB: choose a printer to grant this browser access. The printer must expose a bulk-output interface the browser can claim. An OS printer driver may prevent access."
+                                            : "USB is unavailable in this browser. Use a compatible desktop Chrome/Edge browser over HTTPS or localhost. iOS browsers do not provide WebUSB."}
+                                    </Text>
+                                )}
                                 {groups.map((group) => (
                                     <View key={group.key} style={styles.group}>
                                         <View style={styles.groupHeader}>
@@ -674,7 +749,12 @@ export default function HomeScreen() {
                                                     accessibilityRole="alert"
                                                     style={styles.copy}
                                                 >
-                                                    {usbScanSummary(usbReport)}
+                                                    {usbScanSummary(
+                                                        usbReport,
+                                                        Platform.OS === "web"
+                                                            ? "web"
+                                                            : "android",
+                                                    )}
                                                 </Text>
                                                 {usbReport.devices.map(
                                                     (device) => (
@@ -714,7 +794,7 @@ export default function HomeScreen() {
                                                                 "usb" &&
                                                             Platform.OS ===
                                                                 "ios"
-                                                              ? "USB OTG scanning is available on Android."
+                                                              ? "USB OTG is available on Android and compatible WebUSB browsers. iOS requires a supported accessory SDK; use BLE or network printing."
                                                               : "Requires a native development build."
                                                           : group.empty}
                                                 </Text>
@@ -939,11 +1019,11 @@ export default function HomeScreen() {
                                 </Text>
                                 <Pressable
                                     accessibilityRole="button"
-                                    disabled={!selected || busy || !isNative}
+                                    disabled={!selected || busy || !canPrint}
                                     onPress={() => void testPrint()}
                                     style={[
                                         styles.primaryButton,
-                                        (!selected || busy || !isNative) &&
+                                        (!selected || busy || !canPrint) &&
                                             styles.disabled,
                                     ]}
                                 >
@@ -954,7 +1034,7 @@ export default function HomeScreen() {
                                             : "test label"}
                                     </Text>
                                 </Pressable>
-                                {!isNative && (
+                                {!canPrint && (
                                     <Text style={styles.note}>
                                         Printing requires a native development
                                         build.

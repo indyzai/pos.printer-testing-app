@@ -53,3 +53,8 @@ test("unsupported USB host and discovered printers have distinct next steps", ()
         }),
     ).toContain("Tap the printer and allow USB access");
 });
+
+test("an empty browser permission list does not imply an empty physical USB bus", () => {
+    expect(usbScanSummary(empty, "web")).toContain("Choose USB printer");
+    expect(usbScanSummary(empty, "web")).not.toContain("Android cannot see");
+});

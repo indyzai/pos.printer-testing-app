@@ -1,11 +1,14 @@
 import type {
     PrinterTarget,
+    TransportCapabilities,
     UsbPrinter,
     UsbScanReport,
 } from "@indyzai/pos-printing-native/types";
 import { traceOperation } from "./trace-log";
 
 type Transport = {
+    capabilities?: () => TransportCapabilities;
+    requestUsb?: () => Promise<UsbScanReport>;
     listUsb: () => Promise<UsbPrinter[]>;
     scanUsb: () => Promise<UsbScanReport>;
     listBluetooth: () => Promise<{ name: string; address: string }[]>;
@@ -17,6 +20,17 @@ type Transport = {
 };
 export function createTracedPrinterTransport(transport: Transport): Transport {
     return {
+        capabilities: transport.capabilities?.bind(transport),
+        requestUsb: transport.requestUsb
+            ? () =>
+                  traceOperation(
+                      "USB",
+                      "Choose browser USB printer",
+                      () => transport.requestUsb!(),
+                      undefined,
+                      (report) => report,
+                  )
+            : undefined,
         listUsb: () =>
             traceOperation(
                 "USB",
