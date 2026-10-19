@@ -39,7 +39,14 @@
           "imageWidth": 240
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow IndyzAI Printer Testing to use Face ID to unlock your POS session."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

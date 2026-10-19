@@ -1,16 +1,13 @@
 import { NativeTabs } from "expo-router/unstable-native-tabs";
-import { useColorScheme } from "react-native";
-
-import { Colors } from "../constants/theme";
+import { useAppTheme } from "@indyzai/pos-ui-native";
 
 export default function AppTabs() {
-    const scheme = useColorScheme();
-    const colors = Colors[scheme === "unspecified" ? "light" : scheme];
+    const { themeColors: colors } = useAppTheme();
 
     return (
         <NativeTabs
             backgroundColor={colors.background}
-            indicatorColor={colors.backgroundElement}
+            indicatorColor={colors.surface}
             labelStyle={{ selected: { color: colors.text } }}
         >
             <NativeTabs.Trigger name="index">
@@ -26,6 +23,13 @@ export default function AppTabs() {
                 <NativeTabs.Trigger.Icon
                     src={require("../../assets/images/tabIcons/explore.png")}
                     renderingMode="template"
+                />
+            </NativeTabs.Trigger>
+            <NativeTabs.Trigger name="logs">
+                <NativeTabs.Trigger.Label>Logs</NativeTabs.Trigger.Label>
+                <NativeTabs.Trigger.Icon
+                    sf="doc.text.magnifyingglass"
+                    md="article"
                 />
             </NativeTabs.Trigger>
         </NativeTabs>

@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { radii, useAppTheme, type ThemeColors } from "@indyzai/pos-ui-native";
 import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -23,6 +25,8 @@ const sections = [
 ];
 
 export default function GuideScreen() {
+    const { themeColors } = useAppTheme();
+    const styles = useMemo(() => createStyles(themeColors), [themeColors]);
     return (
         <View style={styles.screen}>
             <SafeAreaView style={styles.safe}>
@@ -49,46 +53,47 @@ export default function GuideScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: "#F9FAFF" },
-    safe: { flex: 1 },
-    content: {
-        width: "100%",
-        maxWidth: 680,
-        alignSelf: "center",
-        padding: 20,
-        paddingBottom: BottomTabInset + 40,
-        gap: 16,
-    },
-    eyebrow: {
-        color: "#1B6EF3",
-        fontSize: 11,
-        fontWeight: "800",
-        letterSpacing: 2,
-    },
-    title: { color: "#1A1C1E", fontSize: 32, fontWeight: "800" },
-    intro: {
-        color: "#43474F",
-        fontSize: 16,
-        lineHeight: 23,
-        marginTop: -8,
-        marginBottom: 8,
-    },
-    card: {
-        backgroundColor: "#FFFFFF",
-        borderRadius: 20,
-        padding: 20,
-        gap: 8,
-        borderWidth: 1,
-        borderColor: "#E5E9F0",
-    },
-    heading: { color: "#1A1C1E", fontSize: 20, fontWeight: "700" },
-    body: { color: "#43474F", fontSize: 15, lineHeight: 23 },
-    note: {
-        color: "#43474F",
-        fontSize: 13,
-        lineHeight: 20,
-        textAlign: "center",
-        marginTop: 8,
-    },
-});
+const createStyles = (c: ThemeColors) =>
+    StyleSheet.create({
+        screen: { flex: 1, backgroundColor: c.background },
+        safe: { flex: 1 },
+        content: {
+            width: "100%",
+            maxWidth: 800,
+            alignSelf: "center",
+            padding: 20,
+            paddingBottom: BottomTabInset + 40,
+            gap: 16,
+        },
+        eyebrow: {
+            color: c.primary,
+            fontSize: 11,
+            fontWeight: "800",
+            letterSpacing: 2,
+        },
+        title: { color: c.text, fontSize: 32, fontWeight: "800" },
+        intro: {
+            color: c.textSecondary,
+            fontSize: 16,
+            lineHeight: 23,
+            marginTop: -8,
+            marginBottom: 8,
+        },
+        card: {
+            backgroundColor: c.surface,
+            borderRadius: radii.large,
+            padding: 20,
+            gap: 8,
+            borderWidth: 1,
+            borderColor: c.outlineMuted,
+        },
+        heading: { color: c.text, fontSize: 20, fontWeight: "700" },
+        body: { color: c.textSecondary, fontSize: 15, lineHeight: 23 },
+        note: {
+            color: c.textSecondary,
+            fontSize: 13,
+            lineHeight: 20,
+            textAlign: "center",
+            marginTop: 8,
+        },
+    });

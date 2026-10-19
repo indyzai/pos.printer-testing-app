@@ -18,16 +18,25 @@
       "version": "1.0.0",
       "dependencies": {
         "@expo/ui": "~57.0.21",
+        "@indyzai/pos-api": "workspace:*",
+        "@indyzai/pos-auth": "workspace:*",
         "@indyzai/pos-printing-native": "workspace:*",
+        "@indyzai/pos-ui-native": "workspace:*",
         "@microsoft/react-native-clarity": "^4.9.1",
         "expo": "~57.0.26",
+        "expo-application": "~57.0.3",
+        "expo-auth-session": "~57.0.16",
+        "expo-clipboard": "~57.0.2",
         "expo-constants": "~57.0.20",
         "expo-device": "~57.0.2",
         "expo-font": "~57.0.4",
         "expo-glass-effect": "~57.0.4",
         "expo-image": "~57.0.5",
+        "expo-linear-gradient": "~57.0.2",
         "expo-linking": "~57.0.11",
+        "expo-local-authentication": "~57.0.3",
         "expo-router": "~57.0.24",
+        "expo-secure-store": "~57.0.4",
         "expo-splash-screen": "~57.0.9",
         "expo-sqlite": "~57.0.3",
         "expo-status-bar": "~57.0.1",
@@ -41,6 +50,7 @@
         "react-native-reanimated": "4.5.1",
         "react-native-safe-area-context": "~5.7.0",
         "react-native-screens": "~4.26.0",
+        "react-native-svg": "15.15.5",
         "react-native-web": "~0.21.0",
         "react-native-worklets": "0.10.1",
       },
@@ -58,6 +68,7 @@
       "dependencies": {
         "@indyzai/pos-config": "workspace:*",
         "@indyzai/pos-storage-native": "workspace:*",
+        "@indyzai/pos-sync": "workspace:*",
         "@indyzai/pos-utils": "workspace:*",
       },
     },
@@ -70,10 +81,11 @@
     },
     "vendor/pos-ui-shared/packages-native/database": {
       "name": "@indyzai/pos-database",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "dependencies": {
         "@indyzai/offline-entity": "workspace:*",
         "@indyzai/pos-offline-store": "workspace:*",
+        "@indyzai/pos-sync": "workspace:*",
         "dexie": "^4.4.6",
         "drizzle-orm": "^0.45.2",
         "expo-sqlite": "~57.0.2",
@@ -120,7 +132,7 @@
     },
     "vendor/pos-ui-shared/packages-native/feature-billing": {
       "name": "@indyzai/feature-billing",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "dependencies": {
         "@indyzai/feature-flags": "workspace:*",
         "@indyzai/pos-database": "workspace:*",
@@ -139,19 +151,30 @@
     },
     "vendor/pos-ui-shared/packages-native/feature-catalog": {
       "name": "@indyzai/feature-catalog",
-      "version": "1.0.0",
-      "dependencies": {
-        "@indyzai/feature-billing": "workspace:*",
-      },
-    },
-    "vendor/pos-ui-shared/packages-native/feature-customers": {
-      "name": "@indyzai/feature-customers",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "dependencies": {
         "@indyzai/feature-billing": "workspace:*",
         "@indyzai/pos-application": "workspace:*",
         "@indyzai/pos-database": "workspace:*",
         "@indyzai/pos-sync": "workspace:*",
+      },
+    },
+    "vendor/pos-ui-shared/packages-native/feature-customers": {
+      "name": "@indyzai/feature-customers",
+      "version": "2.0.0",
+      "dependencies": {
+        "@indyzai/feature-billing": "workspace:*",
+        "@indyzai/pos-application": "workspace:*",
+        "@indyzai/pos-auth": "workspace:*",
+        "@indyzai/pos-database": "workspace:*",
+        "@indyzai/pos-sync": "workspace:*",
+        "@indyzai/pos-ui-native": "workspace:*",
+        "expo-router": "~57.0.19",
+        "lucide-react-native": "^1.41.0",
+      },
+      "peerDependencies": {
+        "react": "19.2.3",
+        "react-native": "0.86.3",
       },
     },
     "vendor/pos-ui-shared/packages-native/feature-flags": {
@@ -166,7 +189,7 @@
     },
     "vendor/pos-ui-shared/packages-native/feature-inventory": {
       "name": "@indyzai/feature-inventory",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "dependencies": {
         "@indyzai/feature-billing": "workspace:*",
         "@indyzai/pos-application": "workspace:*",
@@ -174,6 +197,8 @@
         "@indyzai/pos-database": "workspace:*",
         "@indyzai/pos-permissions": "workspace:*",
         "@indyzai/pos-scanner-native": "workspace:*",
+        "@indyzai/pos-sync": "workspace:*",
+        "@indyzai/pos-sync-native": "workspace:*",
         "@indyzai/pos-ui-native": "workspace:*",
         "@indyzai/pos-utils": "workspace:*",
         "@tanstack/react-query": "^5.102.8",
@@ -195,6 +220,7 @@
         "@indyzai/pos-auth": "workspace:*",
         "@indyzai/pos-database": "workspace:*",
         "@indyzai/pos-sync": "workspace:*",
+        "@indyzai/pos-sync-native": "workspace:*",
         "@indyzai/pos-ui-native": "workspace:*",
         "@indyzai/pos-utils": "workspace:*",
         "drizzle-orm": "^0.45.2",
@@ -208,7 +234,7 @@
     },
     "vendor/pos-ui-shared/packages-native/feature-organization": {
       "name": "@indyzai/feature-organization",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "dependencies": {
         "@indyzai/feature-billing": "workspace:*",
         "@indyzai/feature-flags": "workspace:*",
@@ -221,6 +247,8 @@
         "@indyzai/pos-database": "workspace:*",
         "@indyzai/pos-permissions": "workspace:*",
         "@indyzai/pos-storage-native": "workspace:*",
+        "@indyzai/pos-sync": "workspace:*",
+        "@indyzai/pos-sync-native": "workspace:*",
         "@indyzai/pos-ui-native": "workspace:*",
         "@indyzai/pos-utils": "workspace:*",
         "@tanstack/react-query": "^5.102.8",
@@ -246,6 +274,7 @@
         "@indyzai/pos-printing": "workspace:*",
         "@indyzai/pos-printing-native": "workspace:*",
         "@indyzai/pos-sync": "workspace:*",
+        "@indyzai/pos-sync-native": "workspace:*",
         "@indyzai/pos-ui-native": "workspace:*",
         "drizzle-orm": "^0.45.2",
       },
@@ -275,14 +304,19 @@
       "peerDependencies": {
         "react": "19.2.3",
         "react-native": "0.86.3",
+        "react-native-safe-area-context": "~5.7.0",
       },
     },
     "vendor/pos-ui-shared/packages-native/feature-reports": {
       "name": "@indyzai/feature-reports",
       "version": "1.0.0",
       "dependencies": {
+        "@indyzai/feature-billing": "workspace:*",
         "@indyzai/feature-orders": "workspace:*",
         "@indyzai/pos-auth": "workspace:*",
+        "@indyzai/pos-database": "workspace:*",
+        "@indyzai/pos-sync": "workspace:*",
+        "@indyzai/pos-sync-native": "workspace:*",
         "@indyzai/pos-ui-native": "workspace:*",
         "@indyzai/pos-utils": "workspace:*",
         "lucide-react-native": "^1.41.0",
@@ -349,12 +383,21 @@
         "expo-secure-store": "~57.0.3",
       },
     },
-    "vendor/pos-ui-shared/packages-native/sync": {
-      "name": "@indyzai/pos-sync",
-      "version": "1.0.0",
+    "vendor/pos-ui-shared/packages-native/sync-native": {
+      "name": "@indyzai/pos-sync-native",
+      "version": "2.0.0",
       "dependencies": {
+        "@indyzai/offline-entity": "workspace:*",
+        "@indyzai/pos-api": "workspace:*",
+        "@indyzai/pos-apis": "workspace:*",
         "@indyzai/pos-database": "workspace:*",
+        "@indyzai/pos-sync": "workspace:*",
+        "@indyzai/pos-ui-native": "workspace:*",
         "@indyzai/pos-utils": "workspace:*",
+      },
+      "peerDependencies": {
+        "react": "19.2.3",
+        "react-native": "0.86.3",
       },
     },
     "vendor/pos-ui-shared/packages-native/ui-native": {
@@ -396,9 +439,9 @@
     },
     "vendor/pos-ui-shared/packages/offline-entity": {
       "name": "@indyzai/offline-entity",
-      "version": "0.1.0",
+      "version": "2.0.0",
       "dependencies": {
-        "@indyzai/pos-offline-store": "0.1.0",
+        "@indyzai/pos-offline-store": "2.0.0",
       },
       "peerDependencies": {
         "react": "^19.0.0",
@@ -406,11 +449,19 @@
     },
     "vendor/pos-ui-shared/packages/offline-store": {
       "name": "@indyzai/pos-offline-store",
-      "version": "0.1.0",
+      "version": "2.0.0",
     },
     "vendor/pos-ui-shared/packages/permissions": {
       "name": "@indyzai/pos-permissions",
       "version": "1.0.0",
+    },
+    "vendor/pos-ui-shared/packages/pos-apis": {
+      "name": "@indyzai/pos-apis",
+      "version": "0.1.0",
+      "dependencies": {
+        "@indyzai/offline-entity": "workspace:*",
+        "@indyzai/pos-offline-store": "workspace:*",
+      },
     },
     "vendor/pos-ui-shared/packages/printing": {
       "name": "@indyzai/pos-printing",
@@ -430,6 +481,13 @@
     "vendor/pos-ui-shared/packages/storage": {
       "name": "@indyzai/pos-storage",
       "version": "1.0.0",
+    },
+    "vendor/pos-ui-shared/packages/sync": {
+      "name": "@indyzai/pos-sync",
+      "version": "2.0.0",
+      "dependencies": {
+        "graphql": "^16.12.0",
+      },
     },
     "vendor/pos-ui-shared/packages/ui-core": {
       "name": "@indyzai/pos-ui-core",
@@ -801,6 +859,8 @@
 
     "@indyzai/pos-api": ["@indyzai/pos-api@workspace:vendor/pos-ui-shared/packages-native/api"],
 
+    "@indyzai/pos-apis": ["@indyzai/pos-apis@workspace:vendor/pos-ui-shared/packages/pos-apis"],
+
     "@indyzai/pos-application": ["@indyzai/pos-application@workspace:vendor/pos-ui-shared/packages/application"],
 
     "@indyzai/pos-auth": ["@indyzai/pos-auth@workspace:vendor/pos-ui-shared/packages-native/feature-auth"],
@@ -831,7 +891,9 @@
 
     "@indyzai/pos-storage-native": ["@indyzai/pos-storage-native@workspace:vendor/pos-ui-shared/packages-native/storage-native"],
 
-    "@indyzai/pos-sync": ["@indyzai/pos-sync@workspace:vendor/pos-ui-shared/packages-native/sync"],
+    "@indyzai/pos-sync": ["@indyzai/pos-sync@workspace:vendor/pos-ui-shared/packages/sync"],
+
+    "@indyzai/pos-sync-native": ["@indyzai/pos-sync-native@workspace:vendor/pos-ui-shared/packages-native/sync-native"],
 
     "@indyzai/pos-ui-core": ["@indyzai/pos-ui-core@workspace:vendor/pos-ui-shared/packages/ui-core"],
 
@@ -1521,11 +1583,13 @@
 
     "expo-asset": ["expo-asset@57.0.18", "", { "dependencies": { "@expo/image-utils": "^0.11.5", "expo-constants": "~57.0.19" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-zDIQkUr0NM2S7YRj98Zohf/OBuM1q0o4ctxLz1C1oe4/33lHNLjp+2v3qUtBWVwn0zKka8UGADmS8M+83Wi6pw=="],
 
-    "expo-auth-session": ["expo-auth-session@57.0.13", "", { "dependencies": { "expo-application": "~57.0.3", "expo-constants": "~57.0.19", "expo-crypto": "~57.0.3", "expo-linking": "~57.0.11", "expo-web-browser": "~57.0.3", "invariant": "^2.2.4" }, "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-Ky40Vn2ZQVTesh0pEALgcxPxKZdp7WHu2ODYh0lh1YD3ciQd6WhobYYj2oq8MO9Rx9BBsXC64d2L5+TG+mDgSw=="],
+    "expo-auth-session": ["expo-auth-session@57.0.16", "", { "dependencies": { "expo-application": "~57.0.3", "expo-constants": "~57.0.22", "expo-crypto": "~57.0.4", "expo-linking": "~57.0.13", "expo-web-browser": "~57.0.3", "invariant": "^2.2.4" }, "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-u/RUGLE5AEAhBor6QhlgSeO53i5UtZgizlO1uEH76VV9/yYrMJxKEy1M6Olqix7Xmuv97jdouyrXZMgDR8GxnA=="],
 
     "expo-camera": ["expo-camera@57.0.6", "", { "dependencies": { "barcode-detector": "^3.0.0" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*", "react-native-web": "*" }, "optionalPeers": ["react-native-web"] }, "sha512-eswB77bOzQ2OEvll/hV5VnzywaICFnYF21HIwcyokebFcSTSMfGQk8+VW06DRec9JnWuRExs0QXlfxyMPjS6KQ=="],
 
-    "expo-constants": ["expo-constants@57.0.20", "", { "dependencies": { "@expo/env": "~2.4.3" }, "peerDependencies": { "expo": "*", "react-native": "*" } }, "sha512-WycPVvBgbluSa6yAh6DKnX646ZHrae0gV2ZLum5fioNkR+DiWyulq1+UfS++Jc6yfAh/l55NOirv6mt5cnQhSw=="],
+    "expo-clipboard": ["expo-clipboard@57.0.2", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-VB4Au8X/RbvJKUtJk+87vdtveWSNEa5RzY3ooeO6VNF7Rd49RbQXZOu3/TfEW9p7mU8TCfyTvjyCiAUwSoSJ4w=="],
+
+    "expo-constants": ["expo-constants@57.0.22", "", { "dependencies": { "@expo/env": "~2.4.3" }, "peerDependencies": { "expo": "*", "react-native": "*" } }, "sha512-+mBjnzMWMKIrQa7BP7LTDRC0W7cI+q12/sZns4HzVQJGzgGoAdRJSTEKiObxIw/3EswKXlESkRob8upiL95Q4A=="],
 
     "expo-crypto": ["expo-crypto@57.0.3", "", { "peerDependencies": { "expo": "*" } }, "sha512-SAWqEfF37nc8ot7bXsVmu9AFYwQdC2kGvH/eNAHiR3bmlcf1Vv8wu9AnGKT+a90r3T8YfwMpZP4QAYlo4vCn9w=="],
 
@@ -1547,7 +1611,7 @@
 
     "expo-linear-gradient": ["expo-linear-gradient@57.0.2", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-eGNSfcbdXYvw0B/TQ3nmXKQgj0jLUi3EgsXGlvI79rlXg5RR5dQTkY2yqkf7BQDM3PMd3tqBMZdsLhvBqSUaMg=="],
 
-    "expo-linking": ["expo-linking@57.0.11", "", { "dependencies": { "expo-constants": "~57.0.19", "invariant": "^2.2.4" }, "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-bfTyiPb8szacs8XkGowXt5ssH/vbF26vFG8WUWQar8CcRpQcIzXY980ZkP7pK7Pcdy5MattwFdujrWOxwv5s3Q=="],
+    "expo-linking": ["expo-linking@57.0.13", "", { "dependencies": { "expo-constants": "~57.0.22", "invariant": "^2.2.4" }, "peerDependencies": { "react": "*", "react-native": "*" } }, "sha512-1cjN7Ely0FZqlZItfPYjl6jjrCFLRevrIE/H5XhA6tgDm9uhTaSyJQXyftgt2FvJZ7liheDft7WMnPB9Uktx+A=="],
 
     "expo-local-authentication": ["expo-local-authentication@57.0.3", "", { "dependencies": { "invariant": "^2.2.4" }, "peerDependencies": { "expo": "*" } }, "sha512-1oQCBKz8JOpai+Zp+Z2RkBFIi2CHHWLSJk/pjvT9VEyf8nPFslo4kt1ZlQvtJ4rupbKNCmxqKfYr8Mlo8nJEug=="],
 
@@ -1670,6 +1734,8 @@
     "gopd": ["gopd@1.2.0", "", {}, "sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg=="],
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
+
+    "graphql": ["graphql@16.14.2", "", {}, "sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA=="],
 
     "has-bigints": ["has-bigints@1.1.0", "", {}, "sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg=="],
 
@@ -2554,6 +2620,8 @@
     "eslint-plugin-react/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
     "eslint-plugin-react-hooks/hermes-parser": ["hermes-parser@0.25.1", "", { "dependencies": { "hermes-estree": "0.25.1" } }, "sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA=="],
+
+    "expo-auth-session/expo-crypto": ["expo-crypto@57.0.4", "", { "peerDependencies": { "expo": "*" } }, "sha512-LqMMs/N6wvwZyw4deVmcl3AgXgqMwCVQ9WyWf2eaWyrk99TXSKk5da3QspiLOOjnn5Qv9f8C50cDNuoyLThpdw=="],
 
     "expo-modules-autolinking/commander": ["commander@7.2.0", "", {}, "sha512-QrWXB+ZQSVPmIWIhtEO9H+gwHaMGYiF5ChvoJ+K9ZGHG/sVsa6yiesAD1GC/x46sET00Xlwo1u49RVVVzvcSkw=="],
 

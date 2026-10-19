@@ -1,22 +1,22 @@
 import {
     TabList,
-    TabListProps,
+    type TabListProps,
     Tabs,
     TabSlot,
     TabTrigger,
-    TabTriggerSlotProps,
+    type TabTriggerSlotProps,
 } from "expo-router/ui";
-import { Pressable, StyleSheet, View } from "react-native";
-
-import { ThemedText } from "./themed-text";
-import { ThemedView } from "./themed-view";
-
-import { MaxContentWidth, Spacing } from "../constants/theme";
+import { StyleSheet, Text, View } from "react-native";
+import {
+    AppPressable as Pressable,
+    PosLogo,
+    useAppTheme,
+} from "@indyzai/pos-ui-native";
 
 export default function AppTabs() {
+    const { themeColors: c } = useAppTheme();
     return (
-        <Tabs>
-            <TabSlot style={{ height: "100%" }} />
+        <Tabs style={{ flex: 1, minHeight: 0, backgroundColor: c.background }}>
             <TabList asChild>
                 <CustomTabList>
                     <TabTrigger name="home" href="/" asChild>
@@ -25,79 +25,104 @@ export default function AppTabs() {
                     <TabTrigger name="explore" href="/explore" asChild>
                         <TabButton>Guide</TabButton>
                     </TabTrigger>
+                    <TabTrigger name="logs" href="/logs" asChild>
+                        <TabButton>Logs</TabButton>
+                    </TabTrigger>
                 </CustomTabList>
             </TabList>
+            <TabSlot style={{ flex: 1, minHeight: 0 }} />
         </Tabs>
     );
 }
-
 export function TabButton({
     children,
     isFocused,
     ...props
 }: TabTriggerSlotProps) {
+    const { themeColors: c } = useAppTheme();
     return (
         <Pressable
             {...props}
-            style={({ pressed }) => pressed && styles.pressed}
+            style={({ pressed }) => [
+                styles.tabButton,
+                {
+                    backgroundColor: isFocused ? c.primarySoft : "transparent",
+                    opacity: pressed ? 0.7 : 1,
+                },
+            ]}
         >
-            <ThemedView
-                type={isFocused ? "backgroundSelected" : "backgroundElement"}
-                style={styles.tabButtonView}
+            <Text
+                style={[
+                    styles.tabLabel,
+                    { color: isFocused ? c.primary : c.textSecondary },
+                ]}
             >
-                <ThemedText
-                    type="small"
-                    themeColor={isFocused ? "text" : "textSecondary"}
-                >
-                    {children}
-                </ThemedText>
-            </ThemedView>
+                {children}
+            </Text>
         </Pressable>
     );
 }
-
-export function CustomTabList(props: TabListProps) {
+export function CustomTabList({ children, ...props }: TabListProps) {
+    const { themeColors: c } = useAppTheme();
     return (
-        <View {...props} style={styles.tabListContainer}>
-            <ThemedView type="backgroundElement" style={styles.innerContainer}>
-                <ThemedText type="smallBold" style={styles.brandText}>
-                    IndyzAI Printer Testing
-                </ThemedText>
-
-                {props.children}
-            </ThemedView>
+        <View
+            {...props}
+            style={[
+                styles.navigation,
+                {
+                    backgroundColor: c.surface,
+                    borderBottomColor: c.outlineMuted,
+                },
+            ]}
+        >
+            <View style={styles.inner}>
+                <View style={styles.brand}>
+                    <View style={styles.mark}>
+                        <PosLogo size={36} color={c.primary} />
+                    </View>
+                    <Text
+                        numberOfLines={1}
+                        style={[styles.brandLabel, { color: c.text }]}
+                    >
+                        Printer tools
+                    </Text>
+                </View>
+                <View style={styles.links}>{children}</View>
+            </View>
         </View>
     );
 }
-
 const styles = StyleSheet.create({
-    tabListContainer: {
-        position: "absolute",
+    navigation: { width: "100%", borderBottomWidth: 1, flexShrink: 0 },
+    inner: {
         width: "100%",
-        padding: Spacing.three,
+        maxWidth: 1180,
+        alignSelf: "center",
+        minHeight: 72,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        flexWrap: "wrap",
+    },
+    brand: {
+        flexGrow: 1,
+        flexShrink: 0,
+        minWidth: 140,
+        flexDirection: "row",
+        gap: 8,
+        alignItems: "center",
+    },
+    mark: { width: 36, height: 36, flexShrink: 0 },
+    brandLabel: { fontSize: 15, fontWeight: "800", flexShrink: 1 },
+    links: { flexDirection: "row", gap: 4, flexShrink: 0 },
+    tabButton: {
+        minHeight: 44,
+        borderRadius: 10,
+        paddingHorizontal: 16,
         justifyContent: "center",
         alignItems: "center",
-        flexDirection: "row",
     },
-    innerContainer: {
-        paddingVertical: Spacing.two,
-        paddingHorizontal: Spacing.five,
-        borderRadius: Spacing.five,
-        flexDirection: "row",
-        alignItems: "center",
-        flexGrow: 1,
-        gap: Spacing.two,
-        maxWidth: MaxContentWidth,
-    },
-    brandText: {
-        marginRight: "auto",
-    },
-    pressed: {
-        opacity: 0.7,
-    },
-    tabButtonView: {
-        paddingVertical: Spacing.one,
-        paddingHorizontal: Spacing.three,
-        borderRadius: Spacing.three,
-    },
+    tabLabel: { fontSize: 14, fontWeight: "700" },
 });

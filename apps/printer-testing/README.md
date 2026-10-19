@@ -1,56 +1,46 @@
-# Welcome to your Expo app 👋
+# Printer testing app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Run `bun install` from the repository root, then `bun run start` from `apps/printer-testing`. Use an Android or iOS development build containing the native printer module for physical printing. The web build supports configuration and POS account management but cannot access printers.
 
-## Get started
+Guest mode opens by default. Discover a USB/Bluetooth printer or enter a network address, select a command language and paper width, and save the configuration locally. Android/iOS use SQLite; web uses browser local storage. Test printing never requires an account.
 
-1. Install dependencies
+To use POS:
 
-    ```bash
-    npm install
-    ```
+1. Open **Sign in with POS** to use the same shared login, signup, Google/Microsoft authorization, and registered-device login as the POS apps, then select a business. The login page also offers **Continue testing as guest**.
+2. Save and select a local printer configuration, enter its POS counter ID, and press **Save selected printer to POS**. Existing configurations update the same printer in that business. Saving requires the API's printer administration permission. ESC/POS and ZPL profiles can be registered; EPL and CPCL remain available for local tests.
+3. Press **Refresh print jobs**. Select the local configuration registered to the job's printer, then press **Print job** on a queued receipt or invoice. The app loads real invoice content, sends the requested copies, and waits for you to check the paper and confirm completion.
 
-2. Start the app
+Pause other print agents while using this manual testing tool: the existing POS API does not offer an exclusive job claim. Jobs with an attempted delivery on this device are never automatically resent, including after a restart or a failed completion request. Press **Print job** again to recover the paper-check confirmation for a previously attempted queued job. An uncertain/partial print needs manual inspection and, if necessary, a new job in POS. Unsupported document types and missing invoices cannot fall back to a test receipt.
 
-    ```bash
-    npx expo start
-    ```
+Authentication is provided by `@indyzai/pos-auth`, including its shared screens, routes, device setup, session restoration, and renewal. Tokens use Expo SecureStore on native and the shared browser session store on web, under a separate `indyzai.printer` namespace. Sign-out clears the account session and retains guest printer configurations. Passwords and tokens are never written to the local printer configuration database. Delivery records contain only API/business/job identifiers and delivery state. Rebuild the native development client after installing the authentication modules.
 
-In the output, you'll find options to open the app in a
+API endpoints default to production. Override these variables for other environments:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```dotenv
+EXPO_PUBLIC_AUTH_API_URL=https://api.indyzai.com/auth/api/v1
+EXPO_PUBLIC_POS_API_URL=https://api.indyzai.com/pos/api/graphql
+EXPO_PUBLIC_AUTH_APP_ID=pos-app
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Validation from the repository root:
 
-### Other setup steps
+```bash
+bun test ./apps/printer-testing/src/pos-client.test.ts
+cd apps/printer-testing
+bunx tsc --noEmit
+bunx eslint . --no-cache
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## USB OTG troubleshooting
 
-## Learn more
+On Android, use **Check USB / OTG only** to inspect USB independently of Bluetooth and its permissions. The USB group shows all devices Android enumerates, including devices that do not have a supported raw printing interface. It also shows vendor/product IDs and whether USB access has been granted. Discovery itself does not require granting permission; tap a supported printer to request access before printing.
 
-To learn more about developing your project with Expo, look at the following resources:
+- **Android cannot see a USB device**: reconnect the externally powered printer with an OTG host adapter and data cable. Try a USB mouse on the same adapter to check the tablet connection.
+- **Android sees a USB device, but no supported bulk-output connection**: record the displayed USB ID and printer model. The device may require a vendor/serial driver; it must not be treated as a raw printer automatically.
+- **Install a newly built APK**: the installed native module predates the device diagnostics. Rebuild and reinstall the APK; a Metro reload or JavaScript update cannot add the new Android method.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+The USB inventory does not prove physical output. Check the paper before retrying an interrupted print.
 
-## Join the community
+## Trace logs
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Open **Logs** after reproducing a scan, connection, test-print, or POS print-job issue. The tab shows timestamped events, durations, USB inventory/endpoints and access status, transmitted byte counts, and API operation outcomes. Use **Copy all logs** to copy the trace, **Copy** on a row for a single event, or **Clear** to start a fresh trace. Logs stay in memory across tabs and retain the latest 500 events until the app restarts. Credentials and print contents are excluded or redacted. Rebuild the native APK to include Expo Clipboard for copying on Android/iOS; the selectable log text remains available if clipboard access fails.
