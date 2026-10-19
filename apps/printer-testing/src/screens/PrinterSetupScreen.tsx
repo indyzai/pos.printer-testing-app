@@ -247,7 +247,10 @@ export default function HomeScreen() {
     }
 
     async function scan(usbOnly = false) {
-        traceLog.write("info", "Scan", "Scan requested", { mode: usbOnly ? "usb" : "all", platform: Platform.OS });
+        traceLog.write("info", "Scan", "Scan requested", {
+            mode: usbOnly ? "usb" : "all",
+            platform: Platform.OS,
+        });
         const usbResult: { report?: UsbScanReport } = {};
         setBusy(true);
         setUsbReport(null);
