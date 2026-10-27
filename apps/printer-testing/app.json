@@ -46,7 +46,11 @@
         {
           "faceIDPermission": "Allow IndyzAI Printer Testing to use Face ID to unlock your POS session."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

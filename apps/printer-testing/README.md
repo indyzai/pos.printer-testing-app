@@ -1,6 +1,6 @@
 # Printer testing app
 
-Run `bun install` from the repository root, then `bun run start` from `apps/printer-testing`. Use an Android or iOS development build containing the native printer module for physical printing. The web build supports direct USB printing through WebUSB in compatible Chrome/Edge desktop browsers over HTTPS or localhost, as well as configuration and POS account management. It cannot open raw TCP or native Bluetooth connections.
+Uses Expo SDK 58, React Native 0.88, and React 19.3. Run `nvm use` at the repository root (Node 24.18.0), then run `bun install` from the repository root, then `bun run start` from `apps/printer-testing`. Use an Android or iOS development build containing the native printer module for physical printing. The web build supports direct USB printing through WebUSB in compatible Chrome/Edge desktop browsers over HTTPS or localhost, as well as configuration and POS account management. It cannot open raw TCP or native Bluetooth connections.
 
 Guest mode opens by default. Discover a USB/Bluetooth printer or enter a network address, select a command language and paper width, and save the configuration locally. Android/iOS use SQLite; web uses browser local storage. Test printing never requires an account.
 
@@ -57,3 +57,5 @@ Open **Logs** after reproducing a scan, connection, test-print, or POS print-job
 For desktop web USB, press **Choose USB printer** directly and approve the browser chooser. Scanning lists only devices already authorized for this origin. Select a discovered bulk-output connection, save it locally, then print a test. Saved settings do not bypass browser permissions: choose the device again after access is revoked. The OS driver can prevent claiming an interface; this app does not detach OS drivers or bypass browser restrictions. Identical printers without serial numbers must be connected one at a time to avoid sending output to the wrong device. USB writes are chunked, time-limited, traced, and never automatically retried after uncertain output.
 
 The CD410-UB has no supplied iOS SDK/protocol in this project. Generic wired printing on iOS is not implemented; use the existing BLE/network connection if supported by the actual printer, or obtain the manufacturer's integration SDK. Plugging in an adapter alone cannot enable a raw USB transport on iOS.
+
+After an Expo SDK upgrade, rebuild the native app (`bun run android` or `bun run ios`); a Metro reload cannot update native modules. Native projects are generated from app.json. The root Bun configuration uses a hoisted linker to avoid duplicate native module installations across shared workspaces.
